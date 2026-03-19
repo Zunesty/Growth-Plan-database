@@ -1,106 +1,47 @@
-"use client";
+import Link from "next/link";
 
-import { useState } from "react";
-import GrowthPlanForm from "@/components/GrowthPlanForm";
-import GrowthPlanOutput from "@/components/GrowthPlanOutput";
-
-export type FormData = {
-  salespersonName: string;
-  prospectFirstName: string;
-  prospectLastName: string;
-  prospectCompany: string;
-  interviewTranscript: string;
-  discoveryTranscript: string;
-  whatDoTheySell: string;
-  icp: string;
-  avgContractValue: string;
-  biggestProblem: string;
-  whatTheyDontWant: string;
-  currentState: string;
-  endState: string;
-};
+const tools = [
+  {
+    name: "Growth Plan Creator",
+    description: "Generate custom MarketingOps Growth Plans from discovery call data. Powered by AI.",
+    href: "/growth-plan",
+    status: "Live",
+  },
+];
 
 export default function Home() {
-  const [growthPlan, setGrowthPlan] = useState<string | null>(null);
-  const [formData, setFormData] = useState<FormData | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  const handleGenerate = async (data: FormData) => {
-    setFormData(data);
-    setIsGenerating(true);
-    setGrowthPlan("");
-
-    try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to generate growth plan");
-      }
-
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value);
-          fullText += chunk;
-          setGrowthPlan(fullText);
-        }
-      }
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Something went wrong");
-      setGrowthPlan(null);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleBack = () => {
-    setGrowthPlan(null);
-    setFormData(null);
-  };
-
   return (
-    <main className="flex-1 flex flex-col">
-      {/* Header */}
-      <header className="border-b border-zunesty-green-dark/30 bg-zunesty-green-darkest/40">
-        <div className="max-w-5xl mx-auto px-6 py-5 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-zunesty-green flex items-center justify-center">
-            <span className="text-zunesty-black font-bold text-lg">Z</span>
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-zunesty-light tracking-tight">
-              Zunesty Growth Plan Creator
-            </h1>
-            <p className="text-xs text-zunesty-green-mid">
-              MarketingOps Growth Plan Generator
-            </p>
-          </div>
-        </div>
-      </header>
-
-      {/* Content */}
-      <div className="flex-1 max-w-5xl mx-auto w-full px-6 py-8">
-        {growthPlan === null && !isGenerating ? (
-          <GrowthPlanForm onSubmit={handleGenerate} />
-        ) : (
-          <GrowthPlanOutput
-            plan={growthPlan || ""}
-            isGenerating={isGenerating}
-            formData={formData!}
-            onBack={handleBack}
-            onUpdatePlan={setGrowthPlan}
-          />
-        )}
+    <div className="flex-1 max-w-5xl mx-auto w-full px-6 py-12">
+      <div className="mb-10">
+        <h2 className="text-3xl font-bold text-zunesty-light mb-2">
+          Welcome to Zunesty Tools
+        </h2>
+        <p className="text-zunesty-light/50">
+          Select a tool below to get started.
+        </p>
       </div>
-    </main>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {tools.map((tool) => (
+          <Link
+            key={tool.href}
+            href={tool.href}
+            className="group rounded-xl border border-zunesty-green-dark/30 bg-zunesty-green-darkest/20 p-6 hover:border-zunesty-green/40 hover:bg-zunesty-green-darkest/40 transition-all"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-zunesty-light group-hover:text-zunesty-green transition-colors">
+                {tool.name}
+              </h3>
+              <span className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-full bg-zunesty-green/15 text-zunesty-green border border-zunesty-green/20">
+                {tool.status}
+              </span>
+            </div>
+            <p className="text-sm text-zunesty-light/50 leading-relaxed">
+              {tool.description}
+            </p>
+          </Link>
+        ))}
+      </div>
+    </div>
   );
 }

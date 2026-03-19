@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import type { FormData } from "@/app/page";
+import type { FormData } from "@/lib/types";
 
 type Props = {
   plan: string;

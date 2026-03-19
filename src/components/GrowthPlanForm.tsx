@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { FormData } from "@/app/page";
+import type { FormData } from "@/lib/types";
 
 const FIELDS: { key: keyof FormData; label: string; type: "text" | "textarea"; required: boolean; placeholder: string }[] = [
   { key: "salespersonName", label: "Salesperson Full Name", type: "text", required: true, placeholder: "e.g. John Smith" },
