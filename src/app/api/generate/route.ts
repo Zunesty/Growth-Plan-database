@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 
     const prompt = `You are a senior Growth Partner at Zunesty. Create a comprehensive, personalized Growth Plan proposal for a prospect based on the information below. Follow the EXACT structure provided — this matches our Notion template.
 
-## Prospect Information
+## Prospect Information.
 - **Growth Partner (Salesperson):** ${salespersonName}
 - **Prospect:** ${prospectFirstName} ${prospectLastName}
 - **Company:** ${prospectCompany}
