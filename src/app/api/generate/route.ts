@@ -38,13 +38,17 @@ ${discoveryTranscript}
 
 Create the Growth Plan following this EXACT structure. Use markdown. Be highly specific to this prospect — reference their actual business, numbers, problems, and goals. Never be generic. Use a professional but conversational tone.
 
+CRITICAL TONE RULE: ALWAYS speak DIRECTLY to the prospect using "you" and "your". NEVER refer to them in third person (e.g., NEVER say "Here's what ${prospectFirstName} needs to understand" — instead say "Here's what you need to understand"). The prospect will be reading this document. Address them directly throughout.
+
 Output the plan in this exact format:
 
 ---
 
 # ${prospectCompany} Growth Plan by ${salespersonName}
 
-> 💡 For ${icp}: **How to get you from** **${currentState}** **to** **${endState}** **by increasing revenue by [calculate a realistic ROI figure based on their ACV of ${avgContractValue} and the math model below] per month in 12 months without** **${whatTheyDontWant}**
+> 💡 For ${icp}: **How to get you from ${currentState} to ${endState} by increasing revenue by [calculate ONE realistic monthly ROI figure based on their ACV of ${avgContractValue}] per month in 12 months without ${whatTheyDontWant}**
+
+IMPORTANT: The callout above MUST be exactly ONE sentence. Do not expand it. Do not add extra lines. Keep it punchy and concise exactly as formatted above — just fill in the revenue figure.
 
 ---
 
@@ -52,7 +56,12 @@ Output the plan in this exact format:
 
 > **Evidence that we deliver and that this 4-step method is currently effective for leading organisations.**
 
-Write 2-3 brief case study summaries of similar companies Zunesty has helped (make these realistic and relevant to ${prospectCompany}'s industry). Include company type, challenge, and results achieved.
+Do NOT make up case studies. Instead, output exactly this:
+
+> 📎 **[View our case studies here →](#case-studies)**
+> *Our detailed case studies with real results are maintained separately and linked here for accuracy.*
+
+Then add a brief 2-3 sentence teaser about the types of results Zunesty has delivered for companies similar to ${prospectCompany} (keep it general, do NOT invent specific company names or specific numbers).
 
 ---
 
@@ -64,34 +73,66 @@ Write 2-3 brief case study summaries of similar companies Zunesty has helped (ma
 - Your successes
 - Your knowledge / access
 
-Explain Zunesty's strategic partnerships and how we validate strategies across world-leading organisations. Mention the commitment: weekly meetings for insights, constantly learning/testing with community of leaders, continuous development in business growth.
+Customize this section for ${prospectCompany}. Explain how Zunesty's strategic partnerships validate strategies across world-leading organisations. Our founders have scaled 4 businesses — from EdTech, Marketing, Growth Partnering and Consultancy & Coaching — growing their current business from 0 to $4.8M annual revenue in 18 months. Mention: weekly meetings for insights, constantly learning/testing with a community of leaders, continuous development in business growth.
 
-> Only a select few have access to this - We are one step ahead of the market on business growth.
+### Our commitment to your success:
+1. **Weekly meetings to gain insights on new strategies** to improve results and overcome challenges
+2. **Constantly learning and testing with community of leaders** to stay ahead of a competitive market
+3. **Continuous development in business growth** and outside-of-the-box solutions
+
+> Only a select few have access to this — we are one step ahead of the market on business growth.
 
 ---
 
 # The Why
 
-Write a compelling section explaining why ${prospectCompany} should work with a Growth Partner instead of:
-1. **Agencies** - They're incentivised by bringing on new clients, limited on time, deliver templated services. Full service agencies have no focus on revenue. Performance agencies only fix one part of the funnel.
-2. **Hiring directly** - Expensive (Sales Manager £80K+, Salesperson £50K+, Marketing Manager £20-60K = £150K+ minimum), 50% don't work out, A+ talent already making $100K+.
+Write a compelling section explaining why you (${prospectFirstName}) should work with a Growth Partner instead of other options. Address them directly.
 
-Frame it around: Marketing has changed. Markets are more sophisticated. The agency model makes money for agency owners but won't drive the growth ${prospectCompany} needs. A Growth Partner becomes an investor in their business — incentives align because profits are driven by ${prospectCompany}'s success. Win-win.
+Explain that you can grow revenue by hiring staff or working with agencies, BUT:
+- It's challenging to hire good people — if they're good at sales or marketing, they already have a 6-figure job or run their own business
+- Most people looking for jobs don't know how to get results
+- CEOs have to work with agencies but the agency model is suboptimal
+
+**Why agencies don't work:**
+- Agencies are incentivised by bringing on NEW clients — their focus is not on YOUR success
+- They're limited on time and deliver templated services
+- The few successful agencies grow by outsourcing your work to low-level staff who don't know how to get results
+- Full service agencies have no focus on revenue; performance agencies only fix one part of the funnel
+
+**Why hiring directly is risky:**
+- Sales Manager: £80K+ | Salesperson: £50K+ | Marketing Manager: £20-60K = £150K+ minimum
+- 50% of hires don't work out
+- A+ talent is already making $100K+
+- Sales and marketing teams don't collaborate well
+
+**Marketing has changed:**
+- It's not like a few years ago where you could send cold emails or run Facebook ads and get leads instantly
+- Markets are more sophisticated, companies need to do more to get the same results
+
+**The Growth Partner model:**
+- A Growth Partner works with only a few clients, becoming an extension of your team
+- Incentives align because profits are driven by YOUR success
+- A Growth Partner essentially becomes an investor in your business — one that advises AND does the work
+- Creating a win-win scenario — the relationships that last
 
 ---
 
 # Insights
 
 ## What Can You Expect?
-Based on ${prospectCompany}'s situation, list specific expectations:
+
+GUARDRAILS: Do NOT promise specific revenue figures in this section. Do NOT promise more than "20+ qualified new business opportunities each month". Keep promises realistic and grounded.
+
+Customize these bullet points for ${prospectCompany}:
 - Increased revenue and profits in 3-5 months
-- A trusted full-time partner working to grow the business
-- A proven growth method without guesswork
-- Never compete as a commodity
-- A system that finds and converts dream clients — 20+ qualified opportunities/month
-- New sales and marketing assets
-- Scale whilst reducing dependency on ${prospectFirstName}
-- Increase enterprise value
+- A trusted full-time partner working hard and smart to grow your business
+- Applying a proven growth method to accumulate free cash flow without guesswork
+- Never compete as a commodity — get the price you deserve and never race to the bottom against competitors
+- A new system that finds and converts your dream clients into high-paying customers — 20+ qualified new business opportunities each month
+- New sales and marketing assets that enable you to close prospects you've never been able to reach before
+- Insights and new strategies from the best sales and marketing professionals in the world
+- Scale your business whilst reducing dependency on you, freeing you up to focus on priority tasks
+- Increase your enterprise value to prepare for any upcoming financial event
 
 ---
 
@@ -99,127 +140,223 @@ Based on ${prospectCompany}'s situation, list specific expectations:
 
 ---
 
-## Step 1: Go-to-Market — Build a highly-profitable offer with sales and marketing assets that ${prospectCompany}'s dream prospects love
+## Step 1: Go-to-Market — Build a highly-profitable offer with sales and marketing assets that your dream prospects love
 
-**Why do most ${whatDoTheySell} companies not reach their full potential?**
-- Not looking at growth holistically
-- Focusing too much on product/features when selling
-- Struggling to communicate true value
+Write a DETAILED section (at least 15-20 paragraphs including bullets/quotes). Address ${prospectFirstName} directly as "you". Include ALL of these points:
 
-> **Result?** They stagnate or don't reach potential.
+**Why do most companies in your space not reach their full potential?**
+- They're not looking at growing their business from a holistic perspective
+- They're focusing too much on the product and features when selling and marketing
+- They struggle to communicate the true value they provide to their customer
 
-> **Alternative?** Holistic perspective on growth.
+> **Result?** They don't reach their full potential, stagnate or even collapse.
 
-Explain the data-driven approach: Interview best clients and dream prospects. Ask about problems, desires, what other solutions they tried, why those didn't work. Create case studies. Build an offer and marketing claim that solves dream clients' #1 problem.
+> **Alternative?** A holistic perspective on growth.
 
-Explain the Buyer's Pyramid:
+Explain: Focusing on the product is great because it improves your clients' experience. But being able to effectively communicate what problems you're solving, how, and who you've done it for is just as important. That's marketing and sales — but not in the sense most people think. It's marketing and sales focused on optimising WHOSE problems to solve and WHY they came to you.
+
+> **How to achieve this?** A data-driven mindset.
+
+You've been running your business, so you have happy clients. SPEAK TO THEM. They will tell you what they were struggling with before, what other solutions they tried, how much they spent, and what made them buy from you.
+
+> That's a GOLDMINE full of information.
+
+Would you not like to work with people who get the best results, are very happy, and bring you referrals?
+
+> Here's how we do it…
+
+**Interview your best clients and dream prospects!** Ask about their problems, desires, dreams, fears, frustrations, how you helped, what quantifiable results they obtained, what other solutions they tried and why those didn't work.
+
+> Don't accept surface level answers — get to know them on a deeper level!
+
+Explain how to turn insights into sales assets:
+1. **Record the interview** (with permission) and share on website and LinkedIn — this becomes a case study and powerful social proof
+2. **Create your offer and marketing claim** based on what clients said was most important
+
+Then explain the Buyer's Pyramid:
 - 3% buying now
 - 6-7% open to it
 - 30% not thinking about it
 - 30% don't think they're interested
 - 30% know they're not interested
 
-> The key: to unlock the 97%, you need education-based marketing (covered next).
+Explain: To get a client over the line, you need multiple meetings, pitches, customised proposals — and even then they might say no.
+
+> The key to unlocking the 97% of the market: Education-based marketing (covered in Step 2).
 
 ---
 
-## Step 2: Education-Based Marketing — Fill up ${prospectCompany}'s pipeline with qualified prospects
+## Step 2: Education-Based Marketing — Fill up your pipeline with qualified prospects
 
-At this stage we have: case studies, a marketing claim, and need to get in front of prospects.
+Write a DETAILED section (at least 12-15 paragraphs). Address ${prospectFirstName} directly.
 
-Evaluate channels:
-- Ads — high cost, high risk (and ${prospectFirstName} doesn't want: ${whatTheyDontWant})
-- Referrals — unreliable, can't scale
-- SEO — takes too long
-- Cold calling — high churn, burns relationships
+At this stage we understand we need: case studies, a marketing claim, and education-based marketing to attract prospects.
 
-> Solution: **Relevant education-based outbound email prospecting**
+> So now, we need to figure out how to get in front of your potential clients
 
-We create email campaigns inviting ${icp} to a virtual keynote on a topic relevant to their industry problems.
+Evaluate channels honestly:
+- **Ads** — high cost, high risk, difficult in many B2B industries${whatTheyDontWant.toLowerCase().includes("ad") ? ` (and you've said you don't want this)` : ""}
+- **Referrals** — unreliable, you can't decide the scale
+- **SEO and blogs** — take a very long time, most don't do it right
+- **Cold calling** — SDRs churn quickly, you burn potential relationships${whatTheyDontWant.toLowerCase().includes("cold") ? ` (and you've told us this is off the table)` : ""}
 
-**Math model for ${prospectCompany}:**
-- 6 domains × 3 inboxes = 18 email accounts
-- 35 emails each per day = 630 emails/day
-- 3% lead rate = ~18 leads per day
+> That leaves us with **outbound email prospecting**
 
-> No one gives these numbers in outbound prospecting. Most companies would be happy with 10 leads per month.
+Many companies are afraid this will ruin their reputation or "doesn't work for us." And it can be true — only if done incorrectly.
+
+> But we've found the solution: **relevant education-based marketing**
+
+We create email campaigns inviting your ideal potential clients to a virtual keynote on a topic very relevant to the trends and problems in their industry.
+
+This is VERY different from how most lead generation companies work. They only care about getting a response or a call booked. Our approach takes the entire sales process into account. Because you can't take "number of meetings booked" to the bank.
+
+> How we **guarantee success** with education-based cold email campaigns:
+
+**Let's do some maths…**
+- 6 domains, 3 inboxes per domain = 18 Email Accounts
+- Sending 35 Emails Each Per Day = 630 Emails Per Day
+- 3% Lead Rate = 18.9 Leads Per Day
+
+**18 Leads Per Day (at a low ball)**
+
+> No one is giving these kinds of numbers in outbound prospecting! Most companies would be happy with 10 leads per month.
+
+We're now getting positive responses from qualified prospects. But this is still 2 steps away from money in the bank. We need to turn responses into meetings, then close them.
 
 ---
 
 ## Step 3: Sales Development — Schedule 20+ new business meetings every month
 
-Now we have case studies, marketing claim, and are attracting prospects. Need to convert interest into booked meetings.
+Write a DETAILED section (at least 12-15 paragraphs). Address ${prospectFirstName} directly.
 
-Explain:
-- This is extremely time-consuming (nurturing cold leads at director level)
-- Finding good SDRs is like finding a needle in a haystack
-- Two keys: hiring competent team members + motivating/training them
+**So now we:**
+- ✅ Have case studies of your most successful clients
+- ✅ Have a marketing claim that promises a transformation your clients desire
+- ✅ Are attracting hundreds of prospects with education-based marketing
 
-Framework for responses:
+Now, we need someone to convert interest into sales meetings on your calendar.
+
+> This is simple, but not easy.
+
+Explain WHY it's hard:
+- This is EXTREMELY time-consuming — nurturing a cold lead at director level to join a sales call
+- Doing this effectively diverts focus from other key business development activities
+- Finding a good sales person or SDR is like finding a needle in a haystack
+- They do exist, but you'll pay an arm and a leg, and keeping them is a struggle
+
+> There are 2 keys to success here:
+1. Hiring a competent team member
+2. **Motivating and training them to turn positive responses into booked meetings at a high rate**
+
+Explain: We personally handle this, OR we retain SDRs with a package that heavily incentivises high performance and shows a progression path beyond just compensation.
+
+> Because remember — there will always be someone ready to outspend you
+
+We use a framework that outperforms the market:
 1. Acknowledge what they're saying
-2. Commoditize their rejection
-3. Frame response positively
+2. Commoditize their rejection (if it's there)
+3. Frame your response in a positive light
 
-We manage the full process day-to-day so ${prospectFirstName} can focus on higher-leverage activities.
+This removes reliance on templates and gives freedom to be creative while following a proven structure. We manage the full process day-to-day so you can focus on higher-leverage activities.
+
+> Now we have a reliable, outbound prospecting machine running. The next step is to turn these booked calls into money in the bank…
 
 ---
 
 ## Step 4: Sales Collaboration — Increase sales and improve cash flow with a 3-step sales process
 
-Reference the Buyer's Pyramid again. Sales in today's market has 3 big problems:
-- ⛔️ Oversaturated market
-- ⛔️ Sophisticated buyers
-- ⛔️ Lack of trust
+Write a DETAILED section (at least 12-15 paragraphs). Address ${prospectFirstName} directly.
 
-> Solution: **Keynote approach** — showcase expertise, add value, deliver soft pitch.
+**Now we:**
+- ✅ Have case studies of your most successful clients
+- ✅ Have a marketing claim that promises a transformation your clients desire
+- ✅ Are attracting hundreds and thousands of prospects with education-based marketing
+- ✅ Are booking meetings with interested prospects
 
-Explain how the keynote boosts ROI, fits into the sales cycle, and what it entails.
+> We need to turn that interest into cash in the bank.
+
+Reference the Buyer's Pyramid again. Most don't understand it or forget about it. We take advantage of it.
+
+> Sales today has 3 very BIG problems when marketing to new customers (without referrals):
+
+- ⛔️ **Oversaturated market** — people are fed up with "solutions" that promise the world and don't deliver
+- ⛔️ **Sophisticated buyers** — they educate themselves and know the criteria for good solutions
+- ⛔️ **Lack of trust** — they understand most solutions can't be trusted
+
+> Luckily, we've found a solution to all these problems. Here's how it works:
+
+**Keynote** — an opportunity to showcase your expertise, add value, and deliver a soft pitch for your offer.
+
+Explain how a keynote boosts ROI, where it fits in the sales cycle, what it entails (Introduction section, Close section).
 
 ---
 
-## Celebratory Dinner: Scale Success by Empowering the Team
+## Bonus: Scale & Celebrate — Empower Your Team for Continued Growth
 
-Once the system works, it's time to celebrate and scale. Growth becomes about people. We work with CEOs to build additional revenue from roots to flourishing.
+> **Scale your success by empowering your team.**
 
-Track, review, and audit processes. Expand into new locations/sub-niches. Cut, systematise, and delegate to scale 10x without increasing ${prospectFirstName}'s workload.
+It's time to celebrate what has been achieved. Congratulate team members and create energy that drives more success.
 
-> We are now working ON the business instead of IN the business.
+One of the most challenging but highest-leverage activities a business leader can do is mobilise their team effectively. **Growth becomes all about the people.**
+
+We work with CEOs to build additional revenue from roots to flourishing.
+
+> **Now track, review and audit the processes to improve the results**
+
+You can now expand into new locations and sub-niches and drastically increase revenue without putting additional pressure on yourself and your business leaders.
+
+Once sales and marketing are dialled in, we cut, systematise, and delegate work to mobilise existing team members and new virtual assistants to **scale 10x** without increasing your workload.
+
+> **We are now working ON the business instead of IN the business.**
 
 ---
 
 # Next Steps
 
 ## From Here...
-Summarize the two paths:
-1. Working with agencies or hiring directly (expensive, unreliable, not holistic)
-2. Working together with a proven model — don't waste money testing what works. We guarantee results at a fraction of the cost. Three years of advancement in just three months.
+
+Keep this short and sweet. Two paths:
+
+> **Operate without a structured growth plan.**
+Keep building a fantastic product and hope that prospects will come. This is likely to result in missed opportunities and potential market share loss.
+
+> **Work together with a proven model.**
+You don't have to waste money, time and attention testing what works. We guarantee results at a fraction of the cost and in a fraction of the time. Three years of advancement in just three months!
 
 ---
 
 ## Revenue Growth
 
-**How to add [calculate realistic monthly revenue goal] of new revenue!**
+**How to add [calculate a realistic monthly revenue goal based on their ACV and market] of new revenue!**
 
-Based on the call: ${prospectCompany} is targeting ${icp}.
+Based on the call: you are targeting ${icp}.
 
-Do the math:
-- [Estimate number of prospects available in their market]
+Show realistic numbers:
+- Estimate number of prospects available in their market (be specific to their niche)
 - Ticket size: ${avgContractValue}
 - Booked call rate: 0.9%
 - Qualified rate: 80%
 - Close rate: 30%
 
-Show the calculation step by step and arrive at a monthly revenue figure.
+Show the calculation step by step. Example format:
+**[Number] prospects**
+- 0.9% will book a meeting = [X] booked calls
+- 80% of those will be qualified = [X] qualified prospects
+- 30% of those will close = [X] sales
+**[X] clients × ${avgContractValue} = $[total]**
 
-> **[Revenue figure] new revenue from a channel that [frame positively based on what they don't want to do]**
+If there are multiple market segments they could target, show 2-3 separate calculations and then a combined total.
 
-Overall, this will allow ${prospectCompany} to achieve: ${endState}
+> **$[total] new revenue from a channel that [frame positively — e.g., "requires zero ad spend and no cold calling"]**
+
+Overall, this will allow you to achieve: ${endState}
 
 ---
 
 # Our Delivery / What We Do for You
 
 ## What Working Together Looks Like
+
 > **4 Week Sprint for Results!**
 
 ### Onboarding meeting:
@@ -228,64 +365,119 @@ Overall, this will allow ${prospectCompany} to achieve: ${endState}
 3. Get additional details required for launch
 
 ### Week 1-2:
-1. Review current sales, marketing and product activities
+1. Review current sales, marketing and product activities to learn your business — look for quick wins
 2. Start collecting case studies
-3. Collaborate on offer/value presentation
-4. Build prospect database
+3. Collaborate on how we present the offer/value to increase profits
+4. Start preparing for launch — building your prospect database
 
 ### Week 3:
 1. Create campaigns for priority prospects
-2. Write 5 different campaigns to test market resonance
+2. Write 5 different campaigns to test market message resonance
 
 ### Week 4:
 1. Launch outbound campaigns
-2. Review and optimise daily
-3. Start booking new business meetings
+2. Review and optimise campaigns daily
+3. Start booking new business development opportunities
 
 ### Onwards:
-Focus on improving key metrics by optimising campaigns and collaborating on sales. Monthly sprints. Weekly growth reporting and strategic consulting.
+Focus on improving key metrics by optimising campaigns and collaborating on the sales process. Monthly sprints of focus on key priorities. Weekly growth reporting and strategic consulting.
 
-## What We Do & What You Do
+## Value Stack — What You Get
 
-**Your team:**
+Create a VALUE TABLE showing what Zunesty delivers vs. what it would cost to hire in-house. Format as a list with values:
+
+For each service/pillar from the 4-step plan, show:
+- **Service name** — brief description — **In-house cost: $[X]/year**
+
+Example format:
+- **Sales Collaboration** — Coach sales team, review sales calls, manage your pipeline — **$50,000/year**
+- **Education-Based Marketing** — Full outbound campaigns, email prospecting, lead generation — **$60,000/year**
+- **Go-to-Market Strategy** — Offer creation, case studies, marketing claims, positioning — **$40,000/year**
+- **Sales Development** — SDR management, meeting booking, prospect nurturing — **$65,000/year**
+- **Strategic Consulting** — Weekly growth meetings, campaign optimisation, market insights — **$80,000/year**
+
+Customize the services and values based on ${prospectCompany}'s specific needs from the discovery call. Make the individual values realistic for their industry.
+
+**Total in-house value: $[sum all values]/year**
+
+> **You get all of this for a fraction of the cost. See Partnership Options below.**
+
+## Your Team's Role:
 1. Take the new business development calls/meetings (booked by us)
-2. Feedback progress on sales for continuous improvement
-3. Meet weekly to drive project forward
+2. Feedback progress on sales to allow us to continuously improve marketing and support with sales enablement
+3. Meet weekly to drive project forward and feed insights
 
 ## Our Guarantee
+
 - ☐ Double your investment in 12 months
 - ☐ Have someone else do the work
 - ☐ Onboard new clients
 - ☐ New assets for your business
-- ☐ Increase enterprise value by growing B2B revenue and pipeline
-- ☐ Turbocharge sales and client acquisition
+- ☐ Increase your organisation's enterprise value by increasing B2B revenue and pipeline
+- ☐ Turbocharge your sales and client acquisition
 
 > **Value of £200k+**
-> To guarantee results, we will only work with you until we get results and do not work with any competitors.
+> To guarantee results for our partners, we will only work with you until we get results and do not work with any competitors.
 
 ---
 
 # Partnership Options
 
-Present 2 options:
-1. **Set-up & Initiation** — starter package for getting the system running
-2. **Full Growth Partnership** — ongoing partnership with comprehensive support
+Create TWO partnership options using callout blocks. Format them exactly like this:
 
-Include pricing tiers that make sense for ${prospectCompany}'s size and ACV of ${avgContractValue}.
+> 🥇 **Option 1: [Name] — $[price]/month**
+>
+> **Setup Fee:** $[amount] (If you sign by [date 2 weeks from now], we'll waive the setup fee and reduce the retainer by [X]%)
+>
+> What's included:
+> - [Detail 1 — specific to their needs]
+> - [Detail 2]
+> - [Detail 3]
+> - [Detail 4]
+>
+> **Best for:** [who this option suits]
+
+> 🥈 **Option 2: [Name] — $[price]/month**
+>
+> **Setup Fee:** $[amount]
+>
+> What's included:
+> - [Detail 1]
+> - [Detail 2]
+> - [Detail 3]
+>
+> **Best for:** [who this option suits]
+
+PRICING GUIDANCE: You are an expert growth partner, agency operator, and business strategist. Based on ${prospectCompany}'s size, their ACV of ${avgContractValue}, what they sell (${whatDoTheySell}), and the realistic cost to fulfill the 4-step growth plan we've outlined, recommend pricing that:
+1. Is profitable for Zunesty (consider fulfillment costs: email infrastructure, SDR costs, tools, time)
+2. Represents clear ROI for the prospect (should be a fraction of the projected revenue growth)
+3. Has a higher-tier option that includes more hands-on involvement
+4. Uses a sign-by deadline to create urgency
+Do NOT just guess numbers. Think about what it actually costs to deliver this and price accordingly.
 
 > Zero ad spend!
 
-Break down the value and ROI of the recommended option.
+### ROI Analysis
+
+Show a simple ROI comparison for the recommended option:
+- Investment: $[monthly price] × 12 = $[annual]
+- Projected new revenue: $[from Revenue Growth section]
+- **ROI: [X]x return on investment**
 
 ---
 
 IMPORTANT RULES:
-- Be HIGHLY specific to ${prospectCompany} and ${prospectFirstName}. Reference their actual numbers, problems, industry.
-- Use the discovery call transcript details extensively.
-- Calculate realistic numbers in the Revenue Growth section based on their ACV and market.
+- ALWAYS address ${prospectFirstName} directly as "you" and "your". NEVER use third person.
+- Be HIGHLY specific to ${prospectCompany}. Reference their actual numbers, problems, industry from the discovery call.
+- Each of the 4 Steps should be DETAILED — at least 12-15 paragraphs each with bullets, quotes, and explanations.
+- Calculate realistic numbers in Revenue Growth based on their ACV and market.
 - Keep the tone professional but conversational — like a trusted advisor, not a salesperson.
-- Use bold, callout blocks (>), and lists extensively for readability.
-- Every section should feel personalized, not templated.`;
+- Use bold, callout blocks (> ), emoji checkmarks (✅ ⛔️), and lists extensively for readability.
+- The callout at the top MUST be exactly one sentence.
+- Do NOT promise specific revenue figures in the "What Can You Expect" section.
+- Do NOT invent fake case study companies — link to real ones.
+- Partnership Options MUST use the callout block format with emojis.
+- Value Stack MUST show in-house costs for each service.`;
 
     const stream = anthropic.messages.stream({
       model: "claude-sonnet-4-20250514",
