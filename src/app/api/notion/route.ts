@@ -113,16 +113,14 @@ type Element = {
   blocks?: NotionBlock[];
 };
 
-// Sections that should become sub-pages
+// Sections that should become sub-pages (matched against ## headings only)
 const SUB_PAGE_SECTIONS = [
   "case studies",
   "unique advantage",
   "the why",
   "what can you expect",
-  "step 1", "step 2", "step 3",
-  "1.", "2.", "3.",
   "bonus",
-  "scale & celebrate", "scale",
+  "scale & celebrate",
   "from here",
   "revenue growth",
   "what working together",
@@ -132,9 +130,25 @@ const SUB_PAGE_SECTIONS = [
   "partnership options",
 ];
 
+// Steps are matched separately — they start with "1.", "2.", "3." but we need to
+// avoid matching things like "1. WORKING WITH AGENCIES" inside From Here
+function isStepHeading(title: string): boolean {
+  const lower = title.toLowerCase();
+  // Match "1. Something" but NOT "1. WORKING WITH AGENCIES" or "2. HIRING DIRECTLY"
+  if (/^\d+\./.test(lower)) {
+    // Exclude known static sub-headings that should NOT be sub-pages
+    if (lower.includes("working with agencies") || lower.includes("hiring directly")) {
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
 function shouldBeSubPage(title: string): boolean {
   const lower = title.toLowerCase();
-  return SUB_PAGE_SECTIONS.some(s => lower.includes(s));
+  if (SUB_PAGE_SECTIONS.some(s => lower.includes(s))) return true;
+  return isStepHeading(title);
 }
 
 function parsePlanIntoElements(markdown: string): Element[] {

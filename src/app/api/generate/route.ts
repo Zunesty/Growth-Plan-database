@@ -332,7 +332,7 @@ This is unlikely to get the results you want efficiently because sales and marke
 
 Also, A+ team members are already in roles making over $100,000 per year.
 
-# What are your additional options?
+### What are your additional options?
 
 > **Operate without a structured growth plan.**
 Keep building a fantastic product, and hope that prospects will come.
@@ -459,28 +459,48 @@ Customize the guarantee checkboxes for ${prospectCompany}. Include:
 
 # Partnership Options [DYNAMIC]
 
-Create TWO partnership options using callout blocks:
+Create TWO partnership options. IMPORTANT FORMATTING RULES:
+- Use ONLY ONE callout line (with > ) for each option HEADER — the line with the emoji
+- Use ONLY ONE callout line for each setup/initiation fee
+- Everything else (details, bullets, descriptions) should be REGULAR text — NO ">" prefix
+- Do NOT put bullet points inside callout blocks
+
+Format EXACTLY like this (notice only the headers use >):
 
 > 🥇 **Option 1: [Name]**
 
 > **Setup & Initiation ($[amount])**
 
-> **Setup & Initiation ($[amount])**
-> If you sign by [date 2 weeks from today, which is 2026-04-16], we'll waive the setup fee and reduce the retainer by [X]%
->
-> What's included:
-> - [Detail 1 — specific to their needs]
-> - [Detail 2]
-> - [Detail 3]
-> - [Detail 4]
+> **Setup & Initiation ($[amount])** — If you sign by [date 2 weeks from today, which is 2026-04-16], we'll waive the setup fee and reduce the retainer by [X]%
+
+**What's included:**
+- [Detail 1 — specific to their needs]
+- [Detail 2]
+- [Detail 3]
+- [Detail 4]
+- [Detail 5]
+- [Detail 6]
+
+**Best for:** [who this option suits]
+
+---
 
 > 🥈 **Option 2: [Name — optional upgrade or different scope]**
 
-> **Optional Upgrade: [Description]**
+> **Optional Upgrade: [Description including what's extra beyond Option 1]**
+
+**What's included (everything in Option 1 PLUS):**
+- [Extra detail 1]
+- [Extra detail 2]
+- [Extra detail 3]
+
+**Best for:** [who this option suits]
+
+---
 
 ### Overview of Value to you:
 
-> Zero ad spend!
+> 💡 Zero ad spend!
 
 PRICING GUIDANCE: You are an expert growth partner, agency operator, and business strategist. Based on ${prospectCompany}'s size, their ACV of ${avgContractValue}, what they sell (${whatDoTheySell}), and the realistic cost to fulfill the 3-step growth plan:
 1. Is profitable for Zunesty (consider fulfillment costs: email infrastructure, SDR costs, tools, time)
@@ -504,7 +524,7 @@ IMPORTANT RULES:
 - Each of the 3 Steps should be DETAILED — at least 12-15 paragraphs each.
 - The callout at the top MUST be exactly one sentence.
 - Do NOT promise specific revenue figures in "What Can You Expect".
-- Partnership Options MUST use callout block format with emojis.
+- For Partnership Options: ONLY use ">" callout prefix for option headers and setup fees. ALL other content (bullets, descriptions, best for) should be regular text WITHOUT ">".
 - Step titles MUST be custom to ${prospectCompany}'s business — not generic.
 - This is a 3-STEP plan, not 4.`;
 
