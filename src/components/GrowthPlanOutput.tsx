@@ -119,6 +119,7 @@ export default function GrowthPlanOutput({ plan, isGenerating, formData, onBack,
           plan,
           prospectName: `${formData.prospectFirstName} ${formData.prospectLastName}`,
           prospectCompany: formData.prospectCompany,
+          salespersonName: formData.salespersonName,
         }),
       });
 

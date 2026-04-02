@@ -13,67 +13,81 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { plan, prospectName, prospectCompany } = await req.json();
+    const { plan, prospectName, prospectCompany, salespersonName } = await req.json();
 
     const notion = new Client({ auth: notionKey });
 
-    // Parse the plan into sections for the main page and sub-pages
-    const sections = parsePlanIntoSections(plan);
+    // Parse the markdown plan into ordered elements (headings, sub-pages, inline content)
+    const elements = parsePlanIntoElements(plan);
 
-    // Build main page blocks (callout + headings with child pages)
-    const mainBlocks = buildMainPageBlocks(sections);
+    // Create the main page with just the first batch of blocks (before any child pages)
+    const pageTitle = `${prospectCompany} Growth Plan by ${salespersonName || prospectName}`;
+    const firstBatch = collectBlocksUntilChildPage(elements, 0);
 
-    // Create the main page
-    const pageTitle = `${prospectCompany} Growth Plan by ${prospectName}`;
     const pageParams: Parameters<typeof notion.pages.create>[0] = notionDbId
       ? {
           parent: { database_id: notionDbId },
           properties: {
             title: { title: [{ text: { content: pageTitle } }] },
           },
-          children: mainBlocks.slice(0, 100),
+          children: firstBatch.blocks.slice(0, 100),
         }
       : {
           parent: { page_id: process.env.NOTION_PAGE_ID || "" },
           properties: {
             title: { title: [{ text: { content: pageTitle } }] },
           },
-          children: mainBlocks.slice(0, 100),
+          children: firstBatch.blocks.slice(0, 100),
         };
 
     const page = await notion.pages.create(pageParams);
     const pageId = page.id;
 
-    // If we have more than 100 blocks, append the rest
-    if (mainBlocks.length > 100) {
-      for (let i = 100; i < mainBlocks.length; i += 100) {
-        const batch = mainBlocks.slice(i, i + 100);
+    // If first batch had more than 100 blocks, append the rest
+    if (firstBatch.blocks.length > 100) {
+      for (let i = 100; i < firstBatch.blocks.length; i += 100) {
+        const batch = firstBatch.blocks.slice(i, i + 100);
         await notion.blocks.children.append({ block_id: pageId, children: batch });
       }
     }
 
-    // Now create sub-pages for each major section
-    for (const section of sections) {
-      if (section.isSubPage && section.content.trim()) {
-        const subBlocks = markdownToNotionBlocks(section.content);
-        if (subBlocks.length > 0) {
-          // Create child page
-          const childPage = await notion.pages.create({
-            parent: { page_id: pageId },
-            properties: {
-              title: { title: [{ text: { content: section.title } }] },
-            },
-            children: subBlocks.slice(0, 100),
-          });
+    // Now process remaining elements sequentially — this preserves order
+    let idx = firstBatch.nextIndex;
+    while (idx < elements.length) {
+      const el = elements[idx];
 
-          // Append remaining blocks if over 100
-          if (subBlocks.length > 100) {
-            for (let i = 100; i < subBlocks.length; i += 100) {
-              const batch = subBlocks.slice(i, i + 100);
-              await notion.blocks.children.append({ block_id: childPage.id, children: batch });
-            }
+      if (el.type === "child_page") {
+        // Create child page as a block on the main page (this puts it inline)
+        const subBlocks = markdownToNotionBlocks(el.content);
+        const childPage = await notion.pages.create({
+          parent: { page_id: pageId },
+          properties: {
+            title: { title: [{ text: { content: el.title } }] },
+          },
+          children: subBlocks.slice(0, 100),
+        });
+
+        // Append remaining blocks if over 100
+        if (subBlocks.length > 100) {
+          for (let i = 100; i < subBlocks.length; i += 100) {
+            const batch = subBlocks.slice(i, i + 100);
+            await notion.blocks.children.append({ block_id: childPage.id, children: batch });
           }
         }
+
+        idx++;
+
+        // Now collect blocks until the next child page and append them
+        const nextBatch = collectBlocksUntilChildPage(elements, idx);
+        if (nextBatch.blocks.length > 0) {
+          for (let i = 0; i < nextBatch.blocks.length; i += 100) {
+            const batch = nextBatch.blocks.slice(i, i + 100);
+            await notion.blocks.children.append({ block_id: pageId, children: batch });
+          }
+        }
+        idx = nextBatch.nextIndex;
+      } else {
+        idx++;
       }
     }
 
@@ -92,32 +106,23 @@ export async function POST(req: NextRequest) {
 
 type NotionBlock = Parameters<typeof Client.prototype.blocks.children.append>[0]["children"][number];
 
-type Section = {
+type Element = {
+  type: "block" | "child_page";
   title: string;
   content: string;
-  isSubPage: boolean;
-  level: number; // 1 = h1, 2 = h2
+  blocks?: NotionBlock[];
 };
 
-// Sections that should become sub-pages (matching the Notion template)
+// Sections that should become sub-pages
 const SUB_PAGE_SECTIONS = [
-  "results",
   "case studies",
-  "unique insights",
-  "advantage in partnering",
+  "unique advantage",
   "the why",
   "what can you expect",
-  "go-to-market",
-  "step 1",
-  "education-based marketing",
-  "step 2",
-  "sales development",
-  "step 3",
-  "sales collaboration",
-  "step 4",
+  "step 1", "step 2", "step 3",
+  "1.", "2.", "3.",
   "bonus",
-  "scale & celebrate",
-  "scale",
+  "scale & celebrate", "scale",
   "from here",
   "revenue growth",
   "what working together",
@@ -125,8 +130,6 @@ const SUB_PAGE_SECTIONS = [
   "what we do",
   "our guarantee",
   "partnership options",
-  "our delivery",
-  "next steps",
 ];
 
 function shouldBeSubPage(title: string): boolean {
@@ -134,90 +137,99 @@ function shouldBeSubPage(title: string): boolean {
   return SUB_PAGE_SECTIONS.some(s => lower.includes(s));
 }
 
-function parsePlanIntoSections(markdown: string): Section[] {
+function parsePlanIntoElements(markdown: string): Element[] {
   const lines = markdown.split("\n");
-  const sections: Section[] = [];
-  let currentSection: Section | null = null;
-  let introContent = "";
+  const elements: Element[] = [];
+  let currentContent: string[] = [];
+  let currentSubPage: { title: string; content: string[] } | null = null;
+  let inIntro = true;
 
-  for (const line of lines) {
+  function flushInlineContent() {
+    const text = currentContent.join("\n").trim();
+    if (text) {
+      const blocks = markdownToNotionBlocks(text);
+      elements.push({ type: "block", title: "", content: text, blocks });
+    }
+    currentContent = [];
+  }
+
+  function flushSubPage() {
+    if (currentSubPage) {
+      elements.push({
+        type: "child_page",
+        title: currentSubPage.title,
+        content: currentSubPage.content.join("\n"),
+      });
+      currentSubPage = null;
+    }
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const h1Match = line.match(/^# (.+)/);
     const h2Match = line.match(/^## (.+)/);
 
     if (h1Match) {
-      if (currentSection) sections.push(currentSection);
-      else if (introContent.trim()) {
-        sections.push({ title: "Intro", content: introContent, isSubPage: false, level: 0 });
-      }
       const title = h1Match[1].trim();
-      currentSection = {
-        title,
-        content: "",
-        isSubPage: shouldBeSubPage(title),
-        level: 1,
-      };
-    } else if (h2Match && currentSection) {
-      // Check if this h2 should be its own sub-page
-      const title = h2Match[1].trim();
+      inIntro = false;
+
       if (shouldBeSubPage(title)) {
-        sections.push(currentSection);
-        currentSection = {
-          title,
-          content: "",
-          isSubPage: true,
-          level: 2,
-        };
+        // Flush any current content as inline blocks
+        flushInlineContent();
+        // Flush any current sub-page
+        flushSubPage();
+        // Start new sub-page
+        currentSubPage = { title, content: [] };
       } else {
-        currentSection.content += line + "\n";
+        // Flush current sub-page if any
+        flushSubPage();
+        // This heading stays inline on the main page
+        currentContent.push(line);
+      }
+    } else if (h2Match) {
+      const title = h2Match[1].trim();
+
+      if (shouldBeSubPage(title)) {
+        flushInlineContent();
+        flushSubPage();
+        currentSubPage = { title, content: [] };
+      } else if (currentSubPage) {
+        // h2 inside a sub-page — add it to sub-page content
+        currentSubPage.content.push(line);
+      } else {
+        currentContent.push(line);
       }
     } else {
-      if (currentSection) {
-        currentSection.content += line + "\n";
+      if (currentSubPage) {
+        currentSubPage.content.push(line);
       } else {
-        introContent += line + "\n";
+        if (inIntro || !h1Match) {
+          currentContent.push(line);
+        }
       }
     }
   }
 
-  if (currentSection) sections.push(currentSection);
-  return sections;
+  // Flush remaining
+  flushSubPage();
+  flushInlineContent();
+
+  return elements;
 }
 
-function buildMainPageBlocks(sections: Section[]): NotionBlock[] {
+function collectBlocksUntilChildPage(elements: Element[], startIdx: number): { blocks: NotionBlock[]; nextIndex: number } {
   const blocks: NotionBlock[] = [];
+  let idx = startIdx;
 
-  for (const section of sections) {
-    if (section.level === 0) {
-      // Intro content — check for callout (> line)
-      const introBlocks = markdownToNotionBlocks(section.content);
-      blocks.push(...introBlocks);
-    } else if (section.isSubPage) {
-      // Add a heading for context, then the sub-page reference is created separately
-      if (section.level === 1) {
-        blocks.push({
-          object: "block",
-          type: "heading_1",
-          heading_1: { rich_text: [{ type: "text", text: { content: section.title } }] },
-        });
-      }
-      blocks.push({
-        object: "block",
-        type: "divider",
-        divider: {},
-      });
-    } else {
-      // Non sub-page section — inline it
-      blocks.push({
-        object: "block",
-        type: "heading_1",
-        heading_1: { rich_text: [{ type: "text", text: { content: section.title } }] },
-      });
-      const contentBlocks = markdownToNotionBlocks(section.content);
-      blocks.push(...contentBlocks);
+  while (idx < elements.length) {
+    if (elements[idx].type === "child_page") break;
+    if (elements[idx].blocks) {
+      blocks.push(...elements[idx].blocks!);
     }
+    idx++;
   }
 
-  return blocks;
+  return { blocks, nextIndex: idx };
 }
 
 function markdownToNotionBlocks(markdown: string): NotionBlock[] {
@@ -257,11 +269,10 @@ function markdownToNotionBlocks(markdown: string): NotionBlock[] {
         divider: {},
       });
     }
-    // Callout (> 💡 or > **text**)
+    // Callout (> with emoji)
     else if (line.trim().startsWith("> ")) {
       const content = line.trim().slice(2);
-      // Check if it's a callout with emoji
-      const emojiMatch = content.match(/^([\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}])\s*/u);
+      const emojiMatch = content.match(/^([\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1FA00}-\u{1FAFF}])\s*/u);
       if (emojiMatch) {
         blocks.push({
           object: "block",
@@ -275,8 +286,12 @@ function markdownToNotionBlocks(markdown: string): NotionBlock[] {
       } else {
         blocks.push({
           object: "block",
-          type: "quote",
-          quote: { rich_text: parseInlineMarkdown(content) },
+          type: "callout",
+          callout: {
+            rich_text: parseInlineMarkdown(content),
+            icon: { type: "emoji", emoji: "💡" as const },
+            color: "gray_background",
+          },
         });
       }
     }
@@ -286,22 +301,15 @@ function markdownToNotionBlocks(markdown: string): NotionBlock[] {
       blocks.push({
         object: "block",
         type: "to_do",
-        to_do: {
-          rich_text: parseInlineMarkdown(content),
-          checked: false,
-        },
+        to_do: { rich_text: parseInlineMarkdown(content), checked: false },
       });
     }
-    // Checked checkbox
     else if (line.trim().startsWith("- ☑ ") || line.trim().startsWith("- [x] ")) {
       const content = line.trim().replace(/^- (?:☑|\[x\]) /, "");
       blocks.push({
         object: "block",
         type: "to_do",
-        to_do: {
-          rich_text: parseInlineMarkdown(content),
-          checked: true,
-        },
+        to_do: { rich_text: parseInlineMarkdown(content), checked: true },
       });
     }
     // Checkmark bullet (✅)
@@ -310,10 +318,7 @@ function markdownToNotionBlocks(markdown: string): NotionBlock[] {
       blocks.push({
         object: "block",
         type: "to_do",
-        to_do: {
-          rich_text: parseInlineMarkdown(content),
-          checked: true,
-        },
+        to_do: { rich_text: parseInlineMarkdown(content), checked: true },
       });
     }
     // Cross bullet (⛔️)
