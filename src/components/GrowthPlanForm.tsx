@@ -41,7 +41,7 @@ export default function GrowthPlanForm({ onSubmit }: { onSubmit: (data: FormData
     <div>
       <div className="mb-8">
         <h2 className="text-2xl font-semibold text-zunesty-light mb-2">
-          Enter the Information Below to Create Your Proposal
+          Enter the Information Below to Create Your Proposal.
         </h2>
         <p className="text-sm text-zunesty-light/50">
           Fill in the details from your discovery call to generate a customized growth plan.
