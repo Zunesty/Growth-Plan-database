@@ -52,22 +52,39 @@ IMPORTANT: The callout above MUST be exactly ONE sentence. Keep it punchy and co
 
 # Results
 
+---
+
+## Case Studies
+
 [STATIC — copy exactly]
+
+---
 
 > **Evidence that we deliver and that this 3-step method is currently effective for leading organizations.**
 
-## 1. Amazing
+### Amazing
+
+> 💡 **Amazing** increased their revenue by $5.2M in just two years of working together. We changed their sales process, built out marketing funnels and assets, and created a system to transform their growth.
+
 ---
-## 2. Zoof
+
+### Zoof
+
+> 💡 **Zoof** scaled bootstrapped from $0 to $2M ARR in under a year using our targeted landing pages, acquisition system, and growth strategies. The founders are exploring exit options currently.
+
 ---
-## 3. Axcelerate AI
+
+### Axcelerate AI
+
+> 💡 **Axcelerate AI** got up to booking 15 new business meetings per month within 3 months of working together, and pitching 6-figure contracts to those prospects, using our outbound marketing systems and sales process.
+
 ---
 
 [END STATIC]
 
 ---
 
-# Unique Advantage of Partnering with Zunesty
+## Unique Advantage of Partnering with Zunesty
 
 [STATIC — copy exactly]
 
@@ -96,6 +113,8 @@ We also serve as the Demand Generation expert at a funded enterprise SaaS compan
 ---
 
 # The Why
+
+## The Why
 
 [STATIC — copy exactly]
 

@@ -170,22 +170,11 @@ function parsePlanIntoElements(markdown: string): Element[] {
     const h2Match = line.match(/^## (.+)/);
 
     if (h1Match) {
-      const title = h1Match[1].trim();
       inIntro = false;
 
-      if (shouldBeSubPage(title)) {
-        // Flush any current content as inline blocks
-        flushInlineContent();
-        // Flush any current sub-page
-        flushSubPage();
-        // Start new sub-page
-        currentSubPage = { title, content: [] };
-      } else {
-        // Flush current sub-page if any
-        flushSubPage();
-        // This heading stays inline on the main page
-        currentContent.push(line);
-      }
+      // H1 headings ALWAYS stay on the main page as headings — never become sub-pages
+      flushSubPage();
+      currentContent.push(line);
     } else if (h2Match) {
       const title = h2Match[1].trim();
 
