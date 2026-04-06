@@ -1,4 +1,5 @@
-import { google } from "googleapis";
+import { GoogleSpreadsheet } from "google-spreadsheet";
+import { JWT } from "google-auth-library";
 import { NextRequest } from "next/server";
 import { CLIENTS, type SheetData } from "@/lib/reporting-types";
 
@@ -20,38 +21,38 @@ export async function POST(req: NextRequest) {
     }
 
     const credentials = JSON.parse(credentialsJson);
-    const auth = new google.auth.GoogleAuth({
-      credentials,
+    const auth = new JWT({
+      email: credentials.client_email,
+      key: credentials.private_key,
       scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
     });
 
-    const sheets = google.sheets({ version: "v4", auth });
+    const doc = new GoogleSpreadsheet(client.sheetId, auth);
+    await doc.loadInfo();
+
     const results: SheetData[] = [];
 
     for (const tab of client.tabs) {
       try {
-        const response = await sheets.spreadsheets.values.get({
-          spreadsheetId: client.sheetId,
-          range: `'${tab.name}'`,
-        });
-
-        const values = response.data.values || [];
-        if (values.length > 0) {
-          results.push({
-            tabName: tab.name,
-            mapTo: tab.mapTo,
-            headers: values[0],
-            rows: values.slice(1),
-          });
+        const sheet = doc.sheetsByTitle[tab.name];
+        if (!sheet) {
+          results.push({ tabName: tab.name, mapTo: tab.mapTo, headers: [], rows: [] });
+          continue;
         }
-      } catch (tabError) {
-        console.error(`Error fetching tab ${tab.name}:`, tabError);
+
+        await sheet.loadHeaderRow();
+        const headers = sheet.headerValues;
+        const rows = await sheet.getRows();
+
         results.push({
           tabName: tab.name,
           mapTo: tab.mapTo,
-          headers: [],
-          rows: [],
+          headers,
+          rows: rows.map((row) => headers.map((h) => row.get(h) || "")),
         });
+      } catch (tabError) {
+        console.error(`Error fetching tab ${tab.name}:`, tabError);
+        results.push({ tabName: tab.name, mapTo: tab.mapTo, headers: [], rows: [] });
       }
     }
 
