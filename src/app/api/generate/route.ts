@@ -44,9 +44,20 @@ Output the plan in this EXACT format. Sections marked [STATIC] must be copied EX
 
 # ${prospectCompany} Growth Plan by ${salespersonName}
 
-> 💡 For [extract the job title from the ICP: ${icp}] of [extract the niche/industry from the ICP: ${icp}]: **How to get you from ${currentState} to ${endState} by increasing revenue by [calculate ONE realistic monthly ROI figure based on their ACV of ${avgContractValue}] per month in 12 months without ${whatTheyDontWant}**
+> 💡 For [job title] of [Niche]: **How to get you from [current state] to [desired state] by increasing revenue by [figure in ROI] per month in 12 months without [something they don't want to do]**
 
-IMPORTANT: The callout above MUST follow this EXACT format every time: "For [job title] of [Niche]: How to get you from [current state] to [desired state] by increasing revenue by [figure] per month in 12 months without [something they don't want]". Extract the job title (e.g., "CEOs", "Founders", "VPs of Sales") and the niche (e.g., "SaaS", "Consulting", "E-commerce") from the ICP. Keep it as ONE sentence. [DYNAMIC]
+CRITICAL FORMATTING RULES FOR THE CALLOUT ABOVE:
+- This MUST be exactly ONE short sentence. No more.
+- [job title] = extract a SHORT job title from the ICP (e.g., "CEOs", "Founders", "VPs of Sales"). Source: ${icp}
+- [Niche] = extract the industry/niche in 1-3 words (e.g., "SaaS", "B2B Consulting", "E-commerce"). Source: ${icp}
+- [current state] = condense into a SHORT phrase, max 5-8 words (e.g., "$1.8M and stagnant", "zero predictable pipeline", "$500K with no marketing system"). Source: ${currentState}
+- [desired state] = condense into a SHORT phrase, max 5-8 words (e.g., "$3M+ ARR with predictable pipeline", "$500K+ in sponsorship ARR", "20 qualified leads per month"). Source: ${endState}
+- [figure in ROI] = calculate ONE realistic dollar figure per month based on ACV of ${avgContractValue}
+- [something they don't want to do] = condense into a SHORT phrase, max 5-10 words (e.g., "spending a penny on advertising", "doing cold calling or becoming an influencer", "running ads or cold calling"). Source: ${whatTheyDontWant}
+
+EXAMPLE of correct format: "For CEOs of B2B Consulting: **How to get you from $1.8M and stagnant to $3M+ ARR with predictable pipeline by increasing revenue by $144,000 per month in 12 months without cold calling or unstrategic paid ads**"
+
+DO NOT paste the raw form data. SUMMARIZE each field into a short, punchy phrase. [DYNAMIC]
 
 ---
 
