@@ -44,9 +44,9 @@ Output the plan in this EXACT format. Sections marked [STATIC] must be copied EX
 
 # ${prospectCompany} Growth Plan by ${salespersonName}
 
-> 💡 For ${icp}: **How to get you from ${currentState} to ${endState} by increasing revenue by [calculate ONE realistic monthly ROI figure based on their ACV of ${avgContractValue}] per month in 12 months without ${whatTheyDontWant}**
+> 💡 For [extract the job title from the ICP: ${icp}] of [extract the niche/industry from the ICP: ${icp}]: **How to get you from ${currentState} to ${endState} by increasing revenue by [calculate ONE realistic monthly ROI figure based on their ACV of ${avgContractValue}] per month in 12 months without ${whatTheyDontWant}**
 
-IMPORTANT: The callout above MUST be exactly ONE sentence. Keep it punchy and concise — just fill in the revenue figure. [DYNAMIC]
+IMPORTANT: The callout above MUST follow this EXACT format every time: "For [job title] of [Niche]: How to get you from [current state] to [desired state] by increasing revenue by [figure] per month in 12 months without [something they don't want]". Extract the job title (e.g., "CEOs", "Founders", "VPs of Sales") and the niche (e.g., "SaaS", "Consulting", "E-commerce") from the ICP. Keep it as ONE sentence. [DYNAMIC]
 
 ---
 
@@ -409,6 +409,31 @@ Monthly sprints of focus on key priorities to achieve short term milestone targe
 Weekly growth reporting and strategic consulting on business growth.
 
 [END STATIC]
+
+---
+
+## What We Do — Customized to Your Growth Pillars [DYNAMIC]
+
+Summarize what Zunesty will specifically do for ${prospectCompany}, organized by the 3 pillars (steps) from the growth plan above. For each pillar, list the concrete deliverables and actions we take. This should read as a clear, customized scope of work tied directly to the 3-step plan.
+
+Format:
+
+**Pillar 1: [Step 1 Title from above]**
+- [Specific deliverable or action]
+- [Specific deliverable or action]
+- [Specific deliverable or action]
+
+**Pillar 2: [Step 2 Title from above]**
+- [Specific deliverable or action]
+- [Specific deliverable or action]
+- [Specific deliverable or action]
+
+**Pillar 3: [Step 3 Title from above]**
+- [Specific deliverable or action]
+- [Specific deliverable or action]
+- [Specific deliverable or action]
+
+Make each deliverable specific to ${prospectCompany}'s business and what was discussed on the discovery call.
 
 ---
 

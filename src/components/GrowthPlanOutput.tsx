@@ -67,33 +67,59 @@ export default function GrowthPlanOutput({ plan, isGenerating, formData, onBack,
       setChatMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
       if (reader) {
+        let planStarted = false;
+        let planContent = "";
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value);
+          fullResponse += chunk;
 
-          // Check if this chunk contains the updated plan marker
-          if (chunk.includes("___UPDATED_PLAN___")) {
-            const parts = chunk.split("___UPDATED_PLAN___");
-            fullResponse += parts[0];
-            // Update the assistant message
+          // Check if the accumulated response contains the marker
+          if (!planStarted && fullResponse.includes("___UPDATED_PLAN___")) {
+            planStarted = true;
+            const parts = fullResponse.split("___UPDATED_PLAN___");
+            const chatPart = parts[0];
+            planContent = parts.slice(1).join("___UPDATED_PLAN___");
+
             setChatMessages((prev) => {
               const updated = [...prev];
-              updated[updated.length - 1] = { role: "assistant", content: fullResponse };
+              updated[updated.length - 1] = { role: "assistant", content: chatPart.trim() };
               return updated;
             });
-            // Everything after the marker is the updated plan
-            const updatedPlan = parts[1];
-            if (updatedPlan) {
-              onUpdatePlan(updatedPlan);
+
+            if (planContent.trim()) {
+              onUpdatePlan(planContent.trim());
+            }
+          } else if (planStarted) {
+            // Continue accumulating plan content
+            const parts = fullResponse.split("___UPDATED_PLAN___");
+            planContent = parts.slice(1).join("___UPDATED_PLAN___");
+            if (planContent.trim()) {
+              onUpdatePlan(planContent.trim());
             }
           } else {
-            fullResponse += chunk;
+            // No marker yet — show the full response as chat
             setChatMessages((prev) => {
               const updated = [...prev];
               updated[updated.length - 1] = { role: "assistant", content: fullResponse };
               return updated;
             });
+          }
+        }
+
+        // Final check after stream ends
+        if (!planStarted && fullResponse.includes("___UPDATED_PLAN___")) {
+          const parts = fullResponse.split("___UPDATED_PLAN___");
+          setChatMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: "assistant", content: parts[0].trim() };
+            return updated;
+          });
+          const finalPlan = parts.slice(1).join("___UPDATED_PLAN___").trim();
+          if (finalPlan) {
+            onUpdatePlan(finalPlan);
           }
         }
       }

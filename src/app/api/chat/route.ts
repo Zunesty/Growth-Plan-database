@@ -18,15 +18,25 @@ Your job:
 1. Respond to the user's request conversationally (briefly)
 2. If they ask for edits, output the FULL updated growth plan after your response
 
-IMPORTANT: If you modify the plan, after your conversational response, output the separator "___UPDATED_PLAN___" on its own line, followed by the complete updated plan in markdown. This allows the app to update the displayed plan.
+IMPORTANT: If you modify the plan, after your conversational response, output the separator "___UPDATED_PLAN___" on its own line, followed by the COMPLETE updated plan in markdown. You MUST output the ENTIRE plan — every section from the title through Partnership Options. Do NOT truncate, summarize, or skip sections. The app replaces the displayed plan with your output, so missing sections will be lost.
 
 If the user is just asking a question (not requesting an edit), just respond conversationally without the separator.
+
+CRITICAL FORMAT RULES:
+- The main callout MUST follow: "For [job title] of [Niche]: How to get you from [current state] to [desired state] by increasing revenue by [figure] per month in 12 months without [something they don't want]"
+- Always address the prospect as "you" — never third person
+- [STATIC] sections must remain exactly as they are
+- Keep the exact markdown heading structure (# for H1, ## for H2, ### for H3)
 
 Prospect context:
 - Company: ${formData.prospectCompany}
 - Prospect: ${formData.prospectFirstName} ${formData.prospectLastName}
 - What they sell: ${formData.whatDoTheySell}
-- ACV: ${formData.avgContractValue}`;
+- ICP: ${formData.icp}
+- ACV: ${formData.avgContractValue}
+- Current State: ${formData.currentState}
+- Desired End State: ${formData.endState}
+- What They Don't Want: ${formData.whatTheyDontWant}`;
 
     const messages: Anthropic.MessageParam[] = [
       ...chatHistory.map((msg: { role: string; content: string }) => ({
@@ -38,7 +48,7 @@ Prospect context:
 
     const stream = anthropic.messages.stream({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+      max_tokens: 16000,
       system: systemPrompt,
       messages,
     });

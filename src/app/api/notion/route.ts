@@ -113,7 +113,7 @@ type Element = {
   blocks?: NotionBlock[];
 };
 
-// Sections that should become sub-pages (matched against ## headings only)
+// Sections that should become sub-pages (matched against ## headings)
 const SUB_PAGE_SECTIONS = [
   "case studies",
   "unique advantage",
@@ -127,6 +127,12 @@ const SUB_PAGE_SECTIONS = [
   "value stack",
   "what we do",
   "our guarantee",
+  "partnership options",
+];
+
+// H1 sections that should ALSO become sub-pages (these collapse the entire H1 section into one child page)
+const H1_SUB_PAGE_SECTIONS = [
+  "next steps",
   "partnership options",
 ];
 
@@ -155,7 +161,7 @@ function parsePlanIntoElements(markdown: string): Element[] {
   const lines = markdown.split("\n");
   const elements: Element[] = [];
   let currentContent: string[] = [];
-  let currentSubPage: { title: string; content: string[] } | null = null;
+  let currentSubPage: { title: string; content: string[]; isH1: boolean } | null = null;
   let inIntro = true;
 
   function flushInlineContent() {
@@ -185,17 +191,27 @@ function parsePlanIntoElements(markdown: string): Element[] {
 
     if (h1Match) {
       inIntro = false;
+      const h1Title = h1Match[1].trim();
+      const h1Lower = h1Title.toLowerCase();
 
-      // H1 headings ALWAYS stay on the main page as headings — never become sub-pages
-      flushSubPage();
-      currentContent.push(line);
+      // Check if this H1 should become a sub-page
+      if (H1_SUB_PAGE_SECTIONS.some(s => h1Lower.includes(s))) {
+        flushInlineContent();
+        flushSubPage();
+        currentSubPage = { title: h1Title, content: [], isH1: true };
+      } else {
+        // H1 stays on the main page as a heading
+        flushSubPage();
+        currentContent.push(line);
+      }
     } else if (h2Match) {
       const title = h2Match[1].trim();
 
-      if (shouldBeSubPage(title)) {
+      if (shouldBeSubPage(title) && (!currentSubPage || !currentSubPage.isH1)) {
+        // Create a new sub-page, but NOT if we're inside an H1-level sub-page (those absorb their H2s)
         flushInlineContent();
         flushSubPage();
-        currentSubPage = { title, content: [] };
+        currentSubPage = { title, content: [], isH1: false };
       } else if (currentSubPage) {
         // h2 inside a sub-page — add it to sub-page content
         currentSubPage.content.push(line);
