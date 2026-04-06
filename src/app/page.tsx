@@ -11,7 +11,7 @@ const tools = [
     name: "Client Reporting",
     description: "Voice-first AI reporting tool. Merge voice dumps with Google Sheets data, refine via chat, and push to Gamma.",
     href: "/client-reporting",
-    status: "Coming Soon",
+    status: "Live",
   },
 ];
 
