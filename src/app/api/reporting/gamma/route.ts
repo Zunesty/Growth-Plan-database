@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 
+const GAMMA_API_BASE = "https://public-api.gamma.app/v1.0";
+
 export async function POST(req: NextRequest) {
   const gammaApiKey = process.env.GAMMA_API_KEY;
 
@@ -11,33 +13,76 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { report, clientName, templateId } = await req.json();
+    const { report, clientName, gammaTemplateId } = await req.json();
 
-    // Gamma API integration
-    // Gamma supports creating presentations via their API
-    const response = await fetch("https://gamma.app/api/v1/presentations", {
+    // Use from-template endpoint if a template is configured, otherwise fall back to plain generation
+    const endpoint = gammaTemplateId
+      ? `${GAMMA_API_BASE}/generations/from-template`
+      : `${GAMMA_API_BASE}/generations`;
+
+    const body = gammaTemplateId
+      ? {
+          gammaId: gammaTemplateId,
+          prompt: report,
+        }
+      : {
+          inputText: report,
+          textMode: "preserve",
+          format: "presentation",
+          additionalInstructions: `This is a ${clientName} client report. Format as a clean, minimal slide deck.`,
+        };
+
+    const initRes = await fetch(endpoint, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${gammaApiKey}`,
+        "X-API-KEY": gammaApiKey,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        title: `${clientName} — Client Report`,
-        content: report,
-        templateId: templateId || undefined,
-      }),
+      body: JSON.stringify(body),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Gamma API error: ${response.status} — ${errorText}`);
+    if (!initRes.ok) {
+      const errorText = await initRes.text();
+      throw new Error(`Gamma API error (${initRes.status}): ${errorText}`);
     }
 
-    const data = await response.json();
+    const { generationId } = await initRes.json();
+    if (!generationId) {
+      throw new Error("Gamma did not return a generationId");
+    }
 
+    // Poll until complete (Gamma docs recommend polling every 5 seconds, max ~2 min)
+    const maxAttempts = 24;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+
+      const pollRes = await fetch(`${GAMMA_API_BASE}/generations/${generationId}`, {
+        headers: { "X-API-KEY": gammaApiKey },
+      });
+
+      if (!pollRes.ok) continue;
+
+      const pollData = await pollRes.json();
+
+      if (pollData.status === "completed") {
+        return Response.json({
+          success: true,
+          url: pollData.gammaUrl || null,
+          exportUrl: pollData.exportUrl || null,
+        });
+      }
+
+      if (pollData.status === "failed") {
+        throw new Error(`Gamma generation failed: ${pollData.error || "Unknown error"}`);
+      }
+    }
+
+    // If we time out, return the generation ID so the user can check Gamma manually
     return Response.json({
       success: true,
-      url: data.url || data.presentationUrl || null,
+      pending: true,
+      generationId,
+      message: "Generation is taking longer than expected. Check your Gamma account in a moment.",
     });
   } catch (error) {
     console.error("Gamma error:", error);

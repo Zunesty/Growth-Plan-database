@@ -1,120 +1,143 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
+import { CLIENTS } from "@/lib/reporting-types";
 
 const anthropic = new Anthropic();
 
 export async function POST(req: NextRequest) {
   try {
-    const { transcript, sheetData, clientName, phase, clarificationAnswers, chatHistory, currentDraft } = await req.json();
+    const { clientId, formValues, context, phase, currentDraft, chatHistory } = await req.json();
 
-    let systemPrompt: string;
-    let userMessage: string;
+    const client = CLIENTS.find((c) => c.id === clientId);
+    if (!client) {
+      return Response.json({ error: "Client not found" }, { status: 400 });
+    }
 
-    const sheetSummary = sheetData
-      .map((tab: { mapTo: string; headers: string[]; rows: string[][] }) => {
-        const header = tab.headers.join(" | ");
-        const rows = tab.rows.map((r: string[]) => r.join(" | ")).join("\n");
-        return `### ${tab.mapTo}\n${header}\n${rows}`;
+    // Build a clean summary of the form data, organized by section
+    const formattedData = client.sections
+      .map((section) => {
+        const lines = section.fields
+          .map((field) => {
+            const value = formValues[field.key];
+            if (!value) return null;
+            const displayValue =
+              field.type === "currency"
+                ? `$${value}`
+                : field.type === "percent"
+                ? `${value}%`
+                : value;
+            return `- ${field.label}: ${displayValue}`;
+          })
+          .filter(Boolean);
+
+        if (lines.length === 0) return null;
+        return `### ${section.title}\n${lines.join("\n")}`;
       })
+      .filter(Boolean)
       .join("\n\n");
 
-    if (phase === "clarification") {
-      // Phase 2: One-shot clarification
-      systemPrompt = `You are a precise, minimalist data analyst and executive assistant at Zunesty.
+    if (phase === "draft") {
+      const systemPrompt = `You are a precise, minimalist data analyst and executive assistant at Zunesty.
 
 RULES:
-- Rely ONLY on the provided Google Sheets data for metrics. NEVER hallucinate numbers.
-- Rely entirely on the user's voice dump for sentiment, vibe, and qualitative insights.
-- You are allowed ONLY ONE response to ask clarifying questions. Consolidate ALL doubts into a single bulleted list.
-- Be concise. No fluff.
+- Use ONLY the numbers from the form data provided. NEVER hallucinate or invent metrics.
+- Use the user's context for sentiment, qualitative insights, and the "vibe" of the client relationship.
+- Output should be CLEAN, PUNCHY, and ready for slide-deck consumption.
+- Use short paragraphs, bullets, and bold for emphasis.
+- No filler. Every sentence carries information.
 
-Your task: Review the voice transcript and the Google Sheets data for ${clientName}. Identify any gaps, contradictions, or missing context. Ask ALL your clarifying questions in ONE message as a bulleted list.
+CLIENT REPORT TEMPLATE:
 
-If everything is clear and you have no questions, respond with exactly: "NO_QUESTIONS — Ready to generate the report."`;
-
-      userMessage = `## Voice Dump Transcript
-${transcript}
-
-## Google Sheets Data for ${clientName}
-${sheetSummary}`;
-    } else if (phase === "draft") {
-      // Phase 3: Generate draft
-      systemPrompt = `You are a precise, minimalist data analyst and executive assistant at Zunesty.
-
-RULES:
-- Rely ONLY on the provided Google Sheets data for metrics. NEVER hallucinate or invent numbers.
-- Rely on the voice dump for sentiment and qualitative insights.
-- Format the report for slide-deck consumption — clean, punchy, minimal.
-- Use short paragraphs, bullet points, and bold headers.
-
-REPORT TEMPLATE:
-Format the output as a client report with these sections:
-
-# Client Report: ${clientName}
-*Report Date: [today's date]*
+# ${client.name} Client Report
+*Reporting Period: [infer from context, default to "This Week"]*
 
 ## Executive Summary
-2-3 sentences. Overall status, sentiment, trajectory.
+2-3 sentences capturing overall status, sentiment, and trajectory.
 
 ## Key Metrics
-Pull ONLY from the Google Sheets data. Present as a clean table or bullet list.
-- Include SDR performance metrics if available
-- Include outbound/cold email metrics if available
-- Bold the most important numbers
+Present the form data cleanly. Group by section. Bold the most important numbers.
 
 ## Performance Highlights
-What's working well. Be specific with numbers from the data.
+What's working. Reference specific numbers from the data.
 
 ## Areas of Concern
 What needs attention. Reference specific data points.
 
 ## Sentiment & Vibe Check
-Based on the voice dump. Capture the qualitative feel — how the client relationship is going, their mood, any red flags or green flags.
+From the user's context. Capture the qualitative feel — relationship health, mood, red/green flags.
 
-## Recommended Actions
-3-5 specific, actionable next steps based on the data and voice insights.
+## Recommended Next Steps
+3-5 specific, actionable items based on the data + context.
 
 ## Notes
-Any additional context from the voice dump that doesn't fit above.
+Anything else from the context that doesn't fit above.
 
 ---
 
-Keep it TIGHT. No filler. Every sentence should carry information.`;
+Keep it TIGHT. This goes into a Gamma slide deck — assume the reader scans, doesn't read.`;
 
-      userMessage = `## Voice Dump Transcript
-${transcript}
+      const userMessage = `## Client: ${client.name}
 
-## Google Sheets Data for ${clientName}
-${sheetSummary}
+## Form Data (THE ONLY METRICS — DO NOT INVENT NUMBERS)
+${formattedData || "(No form data provided)"}
 
-${clarificationAnswers ? `## Clarification Answers\n${clarificationAnswers}` : ""}
+## Context from User
+${context || "(No additional context provided)"}
 
 Generate the report now.`;
-    } else if (phase === "chat") {
-      // Phase 3 continued: Chat refinement
-      systemPrompt = `You are a precise, minimalist data analyst and executive assistant at Zunesty.
 
-You have generated a client report draft. The user wants to refine it.
+      const stream = anthropic.messages.stream({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 8000,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userMessage }],
+      });
+
+      const encoder = new TextEncoder();
+      const readable = new ReadableStream({
+        async start(controller) {
+          for await (const event of stream) {
+            if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+              controller.enqueue(encoder.encode(event.delta.text));
+            }
+          }
+          controller.close();
+        },
+      });
+
+      return new Response(readable, {
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
+
+    if (phase === "chat") {
+      const systemPrompt = `You are a precise, minimalist data analyst and executive assistant at Zunesty.
+
+You generated a client report draft for ${client.name}. The user wants to refine it.
 
 Current Report Draft:
 ---
 ${currentDraft}
 ---
 
+Original Form Data (DO NOT INVENT NEW NUMBERS):
+${formattedData}
+
+Original Context:
+${context}
+
 RULES:
-- If the user asks for edits, respond briefly acknowledging the change, then output the separator "___UPDATED_REPORT___" followed by the COMPLETE updated report.
+- If the user asks for edits, briefly acknowledge, then output "___UPDATED_REPORT___" on its own line, followed by the COMPLETE updated report. Output the ENTIRE report — no truncation.
 - If they're just asking a question, respond conversationally without the separator.
 - Maintain the same clean, minimal formatting throughout.
-- NEVER hallucinate metrics — only use numbers from the original data.
+- NEVER hallucinate metrics — only use numbers from the form data.`;
 
-Client: ${clientName}`;
-
-      const messages: Anthropic.MessageParam[] = [
-        ...(chatHistory || []).map((msg: { role: string; content: string }) => ({
+      const messages: Anthropic.MessageParam[] = (chatHistory || []).map(
+        (msg: { role: string; content: string }) => ({
           role: msg.role as "user" | "assistant",
           content: msg.content,
-        })),
-      ];
+        })
+      );
 
       const stream = anthropic.messages.stream({
         model: "claude-sonnet-4-20250514",
@@ -138,33 +161,9 @@ Client: ${clientName}`;
       return new Response(readable, {
         headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
-    } else {
-      return Response.json({ error: "Invalid phase" }, { status: 400 });
     }
 
-    // Stream response for clarification and draft phases
-    const stream = anthropic.messages.stream({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 8000,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
-    });
-
-    const encoder = new TextEncoder();
-    const readable = new ReadableStream({
-      async start(controller) {
-        for await (const event of stream) {
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            controller.enqueue(encoder.encode(event.delta.text));
-          }
-        }
-        controller.close();
-      },
-    });
-
-    return new Response(readable, {
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    });
+    return Response.json({ error: "Invalid phase" }, { status: 400 });
   } catch (error) {
     console.error("Reporting generate error:", error);
     return Response.json(
