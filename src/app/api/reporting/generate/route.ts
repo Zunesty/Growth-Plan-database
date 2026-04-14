@@ -6,7 +6,14 @@ const anthropic = new Anthropic();
 
 export async function POST(req: NextRequest) {
   try {
-    const { clientId, formValues, context, phase, currentDraft, chatHistory } = await req.json();
+    const { clientId, formValues, context, phase, currentDraft, chatHistory } = (await req.json()) as {
+      clientId: string;
+      formValues: Record<string, string>;
+      context: string;
+      phase: "draft" | "chat";
+      currentDraft?: string;
+      chatHistory?: { role: string; content: string }[];
+    };
 
     const client = CLIENTS.find((c) => c.id === clientId);
     if (!client) {
@@ -26,6 +33,13 @@ export async function POST(req: NextRequest) {
                 : field.type === "percent"
                 ? `${value}%`
                 : value;
+            // Textarea fields get their own block for readability
+            if (field.type === "textarea") {
+              return `- **${field.label}:**\n${value
+                .split("\n")
+                .map((line: string) => `  ${line}`)
+                .join("\n")}`;
+            }
             return `- ${field.label}: ${displayValue}`;
           })
           .filter(Boolean);
