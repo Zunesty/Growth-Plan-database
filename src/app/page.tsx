@@ -13,6 +13,12 @@ const tools = [
     href: "/client-reporting",
     status: "Live",
   },
+  {
+    name: "Client Pipeline",
+    description: "Track every client through onboarding, build, launch, and optimization. Surface blockers and see ownership at a glance.",
+    href: "/client-pipeline",
+    status: "Live",
+  },
 ];
 
 export default function Home() {
