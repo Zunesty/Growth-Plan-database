@@ -2,9 +2,28 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Client, Stage, Task } from "./pipeline-types";
-import { createEmptyClient } from "./pipeline-types";
+import { STAGES, createEmptyClient, daysInStage } from "./pipeline-types";
 
 const STORAGE_KEY = "zunesty-pipeline-clients";
+
+// Fire-and-forget Slack notification — won't block UI if it fails
+async function notifySlack(payload: Record<string, unknown>) {
+  try {
+    await fetch("/api/pipeline/slack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    // Silently fail — Slack isn't critical to the UX
+    console.warn("Slack notification failed:", err);
+  }
+}
+
+function clientUrl(clientId: string): string {
+  if (typeof window === "undefined") return "";
+  return `${window.location.origin}/client-pipeline/${clientId}`;
+}
 
 function readClients(): Client[] {
   if (typeof window === "undefined") return [];
@@ -40,6 +59,11 @@ export function usePipeline() {
     (name: string): Client => {
       const client = createEmptyClient(name);
       persist([...readClients(), client]);
+      notifySlack({
+        eventType: "client-added",
+        clientName: client.name,
+        clientUrl: clientUrl(client.id),
+      });
       return client;
     },
     [persist]
@@ -61,11 +85,29 @@ export function usePipeline() {
 
   const moveStage = useCallback(
     (id: string, newStage: Stage) => {
+      const before = readClients().find((c) => c.id === id);
+      if (!before || before.currentStage === newStage) return;
+
+      const days = daysInStage(before);
+      const fromLabel = STAGES.find((s) => s.id === before.currentStage)?.label || before.currentStage;
+      const toLabel = STAGES.find((s) => s.id === newStage)?.label || newStage;
+      const nextOwner = before.tasks[newStage].find((t) => !t.completed)?.owner;
+
       updateClient(id, (c) => ({
         ...c,
         currentStage: newStage,
         stageStartedAt: new Date().toISOString(),
       }));
+
+      notifySlack({
+        eventType: "stage-change",
+        clientName: before.name,
+        fromStage: fromLabel,
+        toStage: toLabel,
+        daysInPrevStage: days,
+        nextOwner,
+        clientUrl: clientUrl(id),
+      });
     },
     [updateClient]
   );
@@ -93,6 +135,10 @@ export function usePipeline() {
 
   const toggleBlocker = useCallback(
     (clientId: string, stage: Stage, taskId: string, reason?: string) => {
+      const before = readClients().find((c) => c.id === clientId);
+      const beforeTask = before?.tasks[stage].find((t) => t.id === taskId);
+      const willBeBlocked = beforeTask ? !beforeTask.blocked : false;
+
       updateClient(clientId, (c) => ({
         ...c,
         tasks: {
@@ -104,6 +150,17 @@ export function usePipeline() {
           ),
         },
       }));
+
+      // Only notify when ADDING a blocker, not removing one
+      if (willBeBlocked && before && beforeTask) {
+        notifySlack({
+          eventType: "blocker-added",
+          clientName: before.name,
+          blockedTaskLabel: beforeTask.label,
+          blockReason: reason || "No reason given",
+          clientUrl: clientUrl(clientId),
+        });
+      }
     },
     [updateClient]
   );
