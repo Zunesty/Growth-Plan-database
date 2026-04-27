@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Client, Stage, Task } from "./pipeline-types";
 import { STAGES, createEmptyClient, daysInStage } from "./pipeline-types";
+import { supabase } from "./supabase";
 
-const STORAGE_KEY = "zunesty-pipeline-clients";
+const TABLE = "pipeline_clients";
 
 // Fire-and-forget Slack notification — won't block UI if it fails
 async function notifySlack(payload: Record<string, unknown>) {
@@ -15,7 +16,6 @@ async function notifySlack(payload: Record<string, unknown>) {
       body: JSON.stringify(payload),
     });
   } catch (err) {
-    // Silently fail — Slack isn't critical to the UX
     console.warn("Slack notification failed:", err);
   }
 }
@@ -25,67 +25,103 @@ function clientUrl(clientId: string): string {
   return `${window.location.origin}/client-pipeline/${clientId}`;
 }
 
-function readClients(): Client[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as Client[];
-  } catch {
+async function fetchClients(): Promise<Client[]> {
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select("data")
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("Supabase fetch error:", error);
     return [];
   }
+  return (data || []).map((row) => row.data as Client);
 }
 
-function writeClients(clients: Client[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
+async function upsertClient(client: Client): Promise<void> {
+  const { error } = await supabase
+    .from(TABLE)
+    .upsert({ id: client.id, data: client, updated_at: new Date().toISOString() });
+  if (error) console.error("Supabase upsert error:", error);
+}
+
+async function deleteClientRow(id: string): Promise<void> {
+  const { error } = await supabase.from(TABLE).delete().eq("id", id);
+  if (error) console.error("Supabase delete error:", error);
 }
 
 export function usePipeline() {
   const [clients, setClients] = useState<Client[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
+  // Initial fetch + refetch when user returns to the tab
   useEffect(() => {
-    setClients(readClients());
-    setHydrated(true);
-  }, []);
+    let cancelled = false;
 
-  const persist = useCallback((next: Client[]) => {
-    setClients(next);
-    writeClients(next);
-  }, []);
-
-  const addClient = useCallback(
-    (name: string): Client => {
-      const client = createEmptyClient(name);
-      persist([...readClients(), client]);
-      notifySlack({
-        eventType: "client-added",
-        clientName: client.name,
-        clientUrl: clientUrl(client.id),
+    const refresh = () => {
+      fetchClients().then((data) => {
+        if (!cancelled) {
+          setClients(data);
+          setHydrated(true);
+        }
       });
-      return client;
-    },
-    [persist]
-  );
+    };
 
-  const deleteClient = useCallback(
-    (id: string) => {
-      persist(readClients().filter((c) => c.id !== id));
-    },
-    [persist]
-  );
+    refresh();
+
+    // Refetch when the tab regains focus or visibility — keeps data fresh
+    // across users without using realtime quota
+    const onFocus = () => refresh();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
+
+  // Manual refresh — exposed via the hook
+  const refresh = useCallback(async () => {
+    const data = await fetchClients();
+    setClients(data);
+  }, []);
+
+  const addClient = useCallback((name: string): Client => {
+    const client = createEmptyClient(name);
+    setClients((prev) => [...prev, client]); // optimistic
+    upsertClient(client);
+    notifySlack({
+      eventType: "client-added",
+      clientName: client.name,
+      clientUrl: clientUrl(client.id),
+    });
+    return client;
+  }, []);
+
+  const deleteClient = useCallback((id: string) => {
+    setClients((prev) => prev.filter((c) => c.id !== id));
+    deleteClientRow(id);
+  }, []);
 
   const updateClient = useCallback(
     (id: string, updater: (c: Client) => Client) => {
-      persist(readClients().map((c) => (c.id === id ? updater(c) : c)));
+      setClients((prev) => {
+        const next = prev.map((c) => (c.id === id ? updater(c) : c));
+        const updated = next.find((c) => c.id === id);
+        if (updated) upsertClient(updated);
+        return next;
+      });
     },
-    [persist]
+    []
   );
 
   const moveStage = useCallback(
     (id: string, newStage: Stage) => {
-      const before = readClients().find((c) => c.id === id);
+      const before = clients.find((c) => c.id === id);
       if (!before || before.currentStage === newStage) return;
 
       const days = daysInStage(before);
@@ -109,7 +145,7 @@ export function usePipeline() {
         clientUrl: clientUrl(id),
       });
     },
-    [updateClient]
+    [clients, updateClient]
   );
 
   const toggleTask = useCallback(
@@ -135,7 +171,7 @@ export function usePipeline() {
 
   const toggleBlocker = useCallback(
     (clientId: string, stage: Stage, taskId: string, reason?: string) => {
-      const before = readClients().find((c) => c.id === clientId);
+      const before = clients.find((c) => c.id === clientId);
       const beforeTask = before?.tasks[stage].find((t) => t.id === taskId);
       const willBeBlocked = beforeTask ? !beforeTask.blocked : false;
 
@@ -151,7 +187,6 @@ export function usePipeline() {
         },
       }));
 
-      // Only notify when ADDING a blocker, not removing one
       if (willBeBlocked && before && beforeTask) {
         notifySlack({
           eventType: "blocker-added",
@@ -162,7 +197,7 @@ export function usePipeline() {
         });
       }
     },
-    [updateClient]
+    [clients, updateClient]
   );
 
   const addTask = useCallback(
@@ -171,7 +206,10 @@ export function usePipeline() {
         ...c,
         tasks: {
           ...c.tasks,
-          [stage]: [...c.tasks[stage], { ...task, id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}` }],
+          [stage]: [
+            ...c.tasks[stage],
+            { ...task, id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}` },
+          ],
         },
       }));
     },
@@ -191,6 +229,7 @@ export function usePipeline() {
   return {
     clients,
     hydrated,
+    refresh,
     addClient,
     deleteClient,
     updateClient,
@@ -200,8 +239,4 @@ export function usePipeline() {
     addTask,
     removeTask,
   };
-}
-
-export function getClient(id: string): Client | undefined {
-  return readClients().find((c) => c.id === id);
 }

@@ -6,7 +6,7 @@ import { usePipeline } from "@/lib/pipeline-store";
 import { STAGES, daysInStage, hasBlockers, stageProgress, type Client, type Stage, type TeamMember } from "@/lib/pipeline-types";
 
 export default function ClientPipelinePage() {
-  const { clients, hydrated, addClient, deleteClient, moveStage } = usePipeline();
+  const { clients, hydrated, refresh, addClient, deleteClient, moveStage } = usePipeline();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newClientName, setNewClientName] = useState("");
 
@@ -44,12 +44,21 @@ export default function ClientPipelinePage() {
             Track every client through onboarding, build, launch, and optimization.
           </p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="rounded-lg bg-zunesty-green px-5 py-2.5 text-sm font-semibold text-zunesty-black hover:bg-zunesty-green/90 transition-colors"
-        >
-          + Add Client
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => refresh()}
+            className="rounded-lg border border-zunesty-green-dark/40 px-3 py-2.5 text-sm text-zunesty-light/70 hover:text-zunesty-light hover:border-zunesty-green-dark transition-colors"
+            title="Refresh from database"
+          >
+            ↻
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="rounded-lg bg-zunesty-green px-5 py-2.5 text-sm font-semibold text-zunesty-black hover:bg-zunesty-green/90 transition-colors"
+          >
+            + Add Client
+          </button>
+        </div>
       </div>
 
       {/* Empty state */}
