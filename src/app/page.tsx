@@ -19,6 +19,12 @@ const tools = [
     href: "/client-pipeline",
     status: "Live",
   },
+  {
+    name: "Ad Generator",
+    description: "Auto-generate static ad batches from Triple Whale winners. Compliance-checked and ready for James to review.",
+    href: "/ad-generator",
+    status: "Beta",
+  },
 ];
 
 export default function Home() {
