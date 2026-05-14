@@ -10,8 +10,10 @@ import {
   stageProgress,
   type AccessStatus,
   type Client,
+  type ClientMetricEntry,
   type CopyApprovalStatus,
   type Stage,
+  type Task,
   type TeamMember,
 } from "@/lib/pipeline-types";
 
@@ -25,8 +27,19 @@ const COPY_STATUSES: { id: CopyApprovalStatus; label: string; color: string }[] 
 
 export default function ClientDetailPage({ params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = use(params);
-  const { clients, hydrated, updateClient, moveStage, toggleTask, toggleBlocker, addTask, removeTask } =
-    usePipeline();
+  const {
+    clients,
+    hydrated,
+    updateClient,
+    moveStage,
+    toggleTask,
+    toggleBlocker,
+    addTask,
+    removeTask,
+    updateTaskNotes,
+    addMetricEntry,
+    removeMetricEntry,
+  } = usePipeline();
   const client = clients.find((c) => c.id === clientId);
 
   const [newTaskLabel, setNewTaskLabel] = useState("");
@@ -174,76 +187,16 @@ export default function ClientDetailPage({ params }: { params: Promise<{ clientI
         </div>
 
         <div className="space-y-2">
-          {currentTasks.map((task) => {
-            const ownerColor = TEAM_MEMBERS.find((m) => m.id === task.owner)?.color || "#7bbd53";
-            return (
-              <div
-                key={task.id}
-                className={`flex items-start gap-3 rounded-lg p-3 border transition-colors ${
-                  task.blocked
-                    ? "bg-red-500/5 border-red-500/30"
-                    : task.completed
-                    ? "bg-zunesty-green/5 border-zunesty-green/20"
-                    : "bg-zunesty-green-darkest/30 border-zunesty-green-dark/20"
-                }`}
-              >
-                <button
-                  onClick={() => toggleTask(client.id, client.currentStage, task.id)}
-                  className={`mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
-                    task.completed
-                      ? "bg-zunesty-green border-zunesty-green"
-                      : "border-zunesty-light/30 hover:border-zunesty-green"
-                  }`}
-                >
-                  {task.completed && (
-                    <svg className="w-3 h-3 text-zunesty-black" fill="currentColor" viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  )}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <div className={`text-sm ${task.completed ? "text-zunesty-light/40 line-through" : "text-zunesty-light"}`}>
-                    {task.label}
-                  </div>
-                  {task.blocked && task.blockReason && (
-                    <div className="text-xs text-red-400 mt-1">🚫 {task.blockReason}</div>
-                  )}
-                </div>
-                <span
-                  className="text-[10px] font-medium px-2 py-0.5 rounded border flex-shrink-0"
-                  style={{
-                    color: ownerColor,
-                    borderColor: `${ownerColor}40`,
-                    backgroundColor: `${ownerColor}10`,
-                  }}
-                >
-                  {task.owner}
-                </span>
-                <button
-                  onClick={() => handleToggleBlock(task.id, task.blocked)}
-                  className={`text-xs px-2 py-0.5 rounded transition-colors flex-shrink-0 ${
-                    task.blocked
-                      ? "text-red-400 bg-red-500/10 hover:bg-red-500/20"
-                      : "text-zunesty-light/30 hover:text-red-400 hover:bg-red-500/10"
-                  }`}
-                  title={task.blocked ? "Unblock" : "Flag as blocked"}
-                >
-                  {task.blocked ? "Unblock" : "Block"}
-                </button>
-                <button
-                  onClick={() => removeTask(client.id, client.currentStage, task.id)}
-                  className="text-xs text-zunesty-light/20 hover:text-red-400 transition-colors flex-shrink-0"
-                  title="Delete task"
-                >
-                  ×
-                </button>
-              </div>
-            );
-          })}
+          {currentTasks.map((task) => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              onToggle={() => toggleTask(client.id, client.currentStage, task.id)}
+              onToggleBlock={() => handleToggleBlock(task.id, task.blocked)}
+              onRemove={() => removeTask(client.id, client.currentStage, task.id)}
+              onNotesChange={(notes) => updateTaskNotes(client.id, client.currentStage, task.id, notes)}
+            />
+          ))}
         </div>
 
         {/* Add task */}
@@ -375,6 +328,13 @@ export default function ClientDetailPage({ params }: { params: Promise<{ clientI
         </section>
       </div>
 
+      {/* Metrics (mockup — pending Silvia's confirmation on exact fields) */}
+      <MetricsSection
+        client={client}
+        onAdd={(entry) => addMetricEntry(client.id, entry)}
+        onRemove={(metricId) => removeMetricEntry(client.id, metricId)}
+      />
+
       {/* Block reason modal */}
       {blockReasonFor && (
         <div
@@ -415,6 +375,349 @@ export default function ClientDetailPage({ params }: { params: Promise<{ clientI
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Task Row with collapsible notes ──────────────────────────────────────────
+function TaskRow({
+  task,
+  onToggle,
+  onToggleBlock,
+  onRemove,
+  onNotesChange,
+}: {
+  task: Task;
+  onToggle: () => void;
+  onToggleBlock: () => void;
+  onRemove: () => void;
+  onNotesChange: (notes: string) => void;
+}) {
+  const ownerColor = TEAM_MEMBERS.find((m) => m.id === task.owner)?.color || "#7bbd53";
+  const [showNotes, setShowNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState(task.notes || "");
+  const hasNotes = !!(task.notes && task.notes.trim());
+
+  useEffect(() => {
+    setNotesDraft(task.notes || "");
+  }, [task.notes]);
+
+  const saveNotes = () => {
+    if (notesDraft !== (task.notes || "")) {
+      onNotesChange(notesDraft);
+    }
+  };
+
+  return (
+    <div
+      className={`rounded-lg border transition-colors ${
+        task.blocked
+          ? "bg-red-500/5 border-red-500/30"
+          : task.completed
+          ? "bg-zunesty-green/5 border-zunesty-green/20"
+          : "bg-zunesty-green-darkest/30 border-zunesty-green-dark/20"
+      }`}
+    >
+      <div className="flex items-start gap-3 p-3">
+        <button
+          onClick={onToggle}
+          className={`mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${
+            task.completed
+              ? "bg-zunesty-green border-zunesty-green"
+              : "border-zunesty-light/30 hover:border-zunesty-green"
+          }`}
+        >
+          {task.completed && (
+            <svg className="w-3 h-3 text-zunesty-black" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                fillRule="evenodd"
+                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                clipRule="evenodd"
+              />
+            </svg>
+          )}
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className={`text-sm ${task.completed ? "text-zunesty-light/40 line-through" : "text-zunesty-light"}`}>
+            {task.label}
+          </div>
+          {task.blocked && task.blockReason && (
+            <div className="text-xs text-red-400 mt-1">🚫 {task.blockReason}</div>
+          )}
+        </div>
+        <span
+          className="text-[10px] font-medium px-2 py-0.5 rounded border flex-shrink-0"
+          style={{ color: ownerColor, borderColor: `${ownerColor}40`, backgroundColor: `${ownerColor}10` }}
+        >
+          {task.owner}
+        </span>
+        <button
+          onClick={() => setShowNotes((v) => !v)}
+          className={`text-xs px-2 py-0.5 rounded transition-colors flex-shrink-0 ${
+            hasNotes
+              ? "text-zunesty-green bg-zunesty-green/10 hover:bg-zunesty-green/20"
+              : "text-zunesty-light/30 hover:text-zunesty-light/70"
+          }`}
+          title={hasNotes ? "View/edit notes" : "Add notes"}
+        >
+          {hasNotes ? "📝 Notes" : "+ Notes"}
+        </button>
+        <button
+          onClick={onToggleBlock}
+          className={`text-xs px-2 py-0.5 rounded transition-colors flex-shrink-0 ${
+            task.blocked
+              ? "text-red-400 bg-red-500/10 hover:bg-red-500/20"
+              : "text-zunesty-light/30 hover:text-red-400 hover:bg-red-500/10"
+          }`}
+          title={task.blocked ? "Unblock" : "Flag as blocked"}
+        >
+          {task.blocked ? "Unblock" : "Block"}
+        </button>
+        <button
+          onClick={onRemove}
+          className="text-xs text-zunesty-light/20 hover:text-red-400 transition-colors flex-shrink-0"
+          title="Delete task"
+        >
+          ×
+        </button>
+      </div>
+
+      {showNotes && (
+        <div className="px-3 pb-3 -mt-1">
+          <textarea
+            value={notesDraft}
+            onChange={(e) => setNotesDraft(e.target.value)}
+            onBlur={saveNotes}
+            placeholder="Add notes about this task — context, info, anything to track..."
+            rows={3}
+            className="w-full rounded-lg border border-zunesty-green-dark/30 bg-zunesty-green-darkest/40 px-3 py-2 text-xs text-zunesty-light placeholder:text-zunesty-light/25 focus:border-zunesty-green focus:outline-none focus:ring-1 focus:ring-zunesty-green/30 transition-colors resize-y"
+          />
+          <p className="text-[10px] text-zunesty-light/30 mt-1">Auto-saves when you click away</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Metrics Section (mockup) ─────────────────────────────────────────────────
+function MetricsSection({
+  client,
+  onAdd,
+  onRemove,
+}: {
+  client: Client;
+  onAdd: (entry: Omit<ClientMetricEntry, "id" | "createdAt">) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [weekOf, setWeekOf] = useState(() => {
+    // Default to the most recent Monday
+    const now = new Date();
+    const day = now.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diff);
+    return monday.toISOString().split("T")[0];
+  });
+  const [bookedMeetings, setBookedMeetings] = useState("");
+  const [meetingsHeld, setMeetingsHeld] = useState("");
+  const [revenue, setRevenue] = useState("");
+  const [closeRate, setCloseRate] = useState("");
+  const [emailsSent, setEmailsSent] = useState("");
+  const [positiveReplies, setPositiveReplies] = useState("");
+  const [customNotes, setCustomNotes] = useState("");
+
+  const metrics = (client.metrics || []).slice().sort((a, b) =>
+    a.weekOf < b.weekOf ? 1 : -1
+  );
+
+  const handleSubmit = () => {
+    onAdd({
+      weekOf,
+      bookedMeetings: bookedMeetings ? parseInt(bookedMeetings) : undefined,
+      meetingsHeld: meetingsHeld ? parseInt(meetingsHeld) : undefined,
+      revenue: revenue ? parseFloat(revenue) : undefined,
+      closeRate: closeRate ? parseFloat(closeRate) : undefined,
+      emailsSent: emailsSent ? parseInt(emailsSent) : undefined,
+      positiveReplies: positiveReplies ? parseInt(positiveReplies) : undefined,
+      customNotes: customNotes || undefined,
+      createdBy: "Santiago",
+    });
+    setBookedMeetings("");
+    setMeetingsHeld("");
+    setRevenue("");
+    setCloseRate("");
+    setEmailsSent("");
+    setPositiveReplies("");
+    setCustomNotes("");
+    setShowAdd(false);
+  };
+
+  return (
+    <section className="rounded-xl border border-zunesty-green-dark/30 bg-zunesty-green-darkest/20 p-6">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h3 className="text-sm font-semibold text-zunesty-green uppercase tracking-wider">
+            Metrics
+          </h3>
+          <p className="text-xs text-zunesty-light/40 mt-0.5">
+            Mockup — pending Silvia&apos;s confirmation on exact fields and Excel upload flow
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            disabled
+            className="rounded-lg border border-zunesty-green-dark/40 px-3 py-1.5 text-xs text-zunesty-light/30 cursor-not-allowed"
+            title="Coming soon"
+          >
+            Upload Excel
+          </button>
+          <button
+            onClick={() => setShowAdd((v) => !v)}
+            className="rounded-lg bg-zunesty-green px-3 py-1.5 text-xs font-semibold text-zunesty-black hover:bg-zunesty-green/90 transition-colors"
+          >
+            {showAdd ? "Cancel" : "+ Add Entry"}
+          </button>
+        </div>
+      </div>
+
+      {showAdd && (
+        <div className="rounded-lg border border-zunesty-green-dark/30 bg-zunesty-green-darkest/30 p-4 mb-4 space-y-3">
+          <div>
+            <label className="block text-[10px] font-medium text-zunesty-light/60 uppercase tracking-wider mb-1">
+              Week Of (Monday)
+            </label>
+            <input
+              type="date"
+              value={weekOf}
+              onChange={(e) => setWeekOf(e.target.value)}
+              className="rounded-lg border border-zunesty-green-dark/40 bg-zunesty-green-darkest/60 px-3 py-2 text-xs text-zunesty-light focus:border-zunesty-green focus:outline-none transition-colors"
+            />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <MetricInput label="Booked Meetings" value={bookedMeetings} onChange={setBookedMeetings} />
+            <MetricInput label="Meetings Held" value={meetingsHeld} onChange={setMeetingsHeld} />
+            <MetricInput label="Revenue" value={revenue} onChange={setRevenue} prefix="$" />
+            <MetricInput label="Close Rate" value={closeRate} onChange={setCloseRate} suffix="%" />
+            <MetricInput label="Emails Sent" value={emailsSent} onChange={setEmailsSent} />
+            <MetricInput label="Positive Replies" value={positiveReplies} onChange={setPositiveReplies} />
+          </div>
+          <div>
+            <label className="block text-[10px] font-medium text-zunesty-light/60 uppercase tracking-wider mb-1">
+              Notes
+            </label>
+            <textarea
+              value={customNotes}
+              onChange={(e) => setCustomNotes(e.target.value)}
+              placeholder="Anything else worth tracking this week..."
+              rows={2}
+              className="w-full rounded-lg border border-zunesty-green-dark/40 bg-zunesty-green-darkest/60 px-3 py-2 text-xs text-zunesty-light placeholder:text-zunesty-light/25 focus:border-zunesty-green focus:outline-none transition-colors resize-y"
+            />
+          </div>
+          <button
+            onClick={handleSubmit}
+            className="w-full rounded-lg bg-zunesty-green px-4 py-2 text-xs font-semibold text-zunesty-black hover:bg-zunesty-green/90 transition-colors"
+          >
+            Save Entry
+          </button>
+        </div>
+      )}
+
+      {metrics.length === 0 ? (
+        <div className="text-center py-8 text-xs text-zunesty-light/40">
+          No metric entries yet. Add the first one to start tracking.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-zunesty-green/70 border-b border-zunesty-green-dark/30">
+                <th className="text-left py-2 px-2 font-semibold">Week</th>
+                <th className="text-right py-2 px-2 font-semibold">Booked</th>
+                <th className="text-right py-2 px-2 font-semibold">Held</th>
+                <th className="text-right py-2 px-2 font-semibold">Revenue</th>
+                <th className="text-right py-2 px-2 font-semibold">Close %</th>
+                <th className="text-right py-2 px-2 font-semibold">Emails</th>
+                <th className="text-right py-2 px-2 font-semibold">Pos. Replies</th>
+                <th className="text-left py-2 px-2 font-semibold">Notes</th>
+                <th className="py-2 px-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {metrics.map((m) => (
+                <tr key={m.id} className="border-b border-zunesty-green-dark/15 text-zunesty-light/80">
+                  <td className="py-2 px-2 font-mono">
+                    {new Date(m.weekOf).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </td>
+                  <td className="text-right py-2 px-2">{m.bookedMeetings ?? "—"}</td>
+                  <td className="text-right py-2 px-2">{m.meetingsHeld ?? "—"}</td>
+                  <td className="text-right py-2 px-2">
+                    {m.revenue !== undefined ? `$${m.revenue.toLocaleString()}` : "—"}
+                  </td>
+                  <td className="text-right py-2 px-2">{m.closeRate !== undefined ? `${m.closeRate}%` : "—"}</td>
+                  <td className="text-right py-2 px-2">{m.emailsSent ?? "—"}</td>
+                  <td className="text-right py-2 px-2">{m.positiveReplies ?? "—"}</td>
+                  <td className="py-2 px-2 text-zunesty-light/50 italic max-w-xs truncate" title={m.customNotes}>
+                    {m.customNotes || ""}
+                  </td>
+                  <td className="text-right py-2 px-2">
+                    <button
+                      onClick={() => onRemove(m.id)}
+                      className="text-zunesty-light/20 hover:text-red-400 transition-colors"
+                    >
+                      ×
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MetricInput({
+  label,
+  value,
+  onChange,
+  prefix,
+  suffix,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  prefix?: string;
+  suffix?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-[10px] font-medium text-zunesty-light/60 uppercase tracking-wider mb-1">
+        {label}
+      </label>
+      <div className="relative">
+        {prefix && (
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-zunesty-light/40 pointer-events-none">
+            {prefix}
+          </span>
+        )}
+        <input
+          type="number"
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="0"
+          className={`w-full rounded-lg border border-zunesty-green-dark/40 bg-zunesty-green-darkest/60 py-2 text-xs text-zunesty-light placeholder:text-zunesty-light/25 focus:border-zunesty-green focus:outline-none transition-colors ${
+            prefix ? "pl-5" : "pl-3"
+          } ${suffix ? "pr-6" : "pr-3"}`}
+        />
+        {suffix && (
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-zunesty-light/40 pointer-events-none">
+            {suffix}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

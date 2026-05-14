@@ -27,6 +27,21 @@ export type Task = {
   blocked: boolean;
   blockReason?: string;
   completedAt?: string;
+  notes?: string;
+};
+
+export type ClientMetricEntry = {
+  id: string;
+  weekOf: string; // ISO date of the Monday of the week
+  bookedMeetings?: number;
+  meetingsHeld?: number;
+  revenue?: number;
+  closeRate?: number; // percent
+  emailsSent?: number;
+  positiveReplies?: number;
+  customNotes?: string;
+  createdBy: string;
+  createdAt: string;
 };
 
 export type CopyApprovalStatus = "not-started" | "drafted" | "reviewed" | "sent-to-client" | "approved";
@@ -57,6 +72,8 @@ export type Client = {
   accesses: ClientAccess[];
   // Tasks per stage
   tasks: Record<Stage, Task[]>;
+  // Weekly metric entries (mockup — pending Silvia's confirmation on exact fields)
+  metrics?: ClientMetricEntry[];
 };
 
 export const DEFAULT_ACCESSES: ClientAccess[] = [

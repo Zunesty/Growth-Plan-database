@@ -226,6 +226,46 @@ export function usePipeline() {
     [updateClient]
   );
 
+  const updateTaskNotes = useCallback(
+    (clientId: string, stage: Stage, taskId: string, notes: string) => {
+      updateClient(clientId, (c) => ({
+        ...c,
+        tasks: {
+          ...c.tasks,
+          [stage]: c.tasks[stage].map((t) =>
+            t.id === taskId ? { ...t, notes: notes || undefined } : t
+          ),
+        },
+      }));
+    },
+    [updateClient]
+  );
+
+  const addMetricEntry = useCallback(
+    (clientId: string, entry: Omit<import("./pipeline-types").ClientMetricEntry, "id" | "createdAt">) => {
+      const full = {
+        ...entry,
+        id: `metric-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        createdAt: new Date().toISOString(),
+      };
+      updateClient(clientId, (c) => ({
+        ...c,
+        metrics: [...(c.metrics || []), full],
+      }));
+    },
+    [updateClient]
+  );
+
+  const removeMetricEntry = useCallback(
+    (clientId: string, metricId: string) => {
+      updateClient(clientId, (c) => ({
+        ...c,
+        metrics: (c.metrics || []).filter((m) => m.id !== metricId),
+      }));
+    },
+    [updateClient]
+  );
+
   return {
     clients,
     hydrated,
@@ -238,5 +278,8 @@ export function usePipeline() {
     toggleBlocker,
     addTask,
     removeTask,
+    updateTaskNotes,
+    addMetricEntry,
+    removeMetricEntry,
   };
 }
