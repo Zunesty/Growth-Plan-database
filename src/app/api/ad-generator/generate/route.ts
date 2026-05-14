@@ -9,7 +9,12 @@ import {
   type AdCreative,
   type WinningAd,
 } from "@/lib/ad-generator-types";
-import { pickRandomImage, downloadImage, uploadImage } from "@/lib/google-drive";
+import {
+  pickRandomImage,
+  downloadImage,
+  uploadImage,
+  type DriveImage,
+} from "@/lib/google-drive";
 import { overlayHeadline } from "@/lib/text-overlay";
 import { generateImage as kieGenerateImage } from "@/lib/kie-ai";
 
@@ -38,6 +43,10 @@ export async function POST(req: NextRequest) {
       winners: WinningAd[];
       createdBy: string;
     };
+
+    // Public origin for the bottle proxy URL — KIE AI fetches the
+    // reference image from here, so it must be reachable from the internet.
+    const publicOrigin = resolvePublicOrigin(req);
 
     // 1. Use Claude to ideate ad concepts grounded in the winners
     const concepts = await ideateConcepts(winners, count);
@@ -68,9 +77,13 @@ export async function POST(req: NextRequest) {
       // Skip image gen if compliance failed
       if (flags.length === 0) {
         try {
-          // Decide image source: bottle-shot vs. AI UGC
+          // Decide image source: bottle-shot vs. AI UGC (image-to-image)
           const useUgc = Math.random() < UGC_MIX_RATIO;
-          const sourceImage = await getSourceImage(concept.visualPrompt, useUgc);
+          const sourceImage = await getSourceImage(
+            concept.visualPrompt,
+            useUgc,
+            publicOrigin
+          );
 
           if (sourceImage) {
             const finalBuffer = await overlayHeadline(sourceImage, {
@@ -178,7 +191,7 @@ TASK: Generate ${count} new ad concepts. Each must include:
 - angle: pick ONE from this list — ${ANGLES.map((a) => a.id).join(", ")}
 - headline: short, punchy, max 12 words. Will be overlaid on the image.
 - hook: 1-sentence opening line for context
-- visualPrompt: detailed description for an image generator. UGC-style, real-looking, NOT stock photo. Include: subject, setting, lighting, composition, mood. The Dopamine Brain Food bottle (white with green label) MUST be visible.
+- visualPrompt: detailed description of the SCENE that will surround the product bottle. UGC-style, real-looking, NOT stock photo. Include: subject (person, hands, mood), setting, lighting, composition, props. DO NOT describe the bottle itself — a real bottle photo will be composited in. Just describe where it sits and what's around it.
 
 COMPLIANCE — DO NOT use any of these words/phrases (FDA risk):
 ${BANNED_WORDS.join(", ")}
@@ -191,7 +204,7 @@ Output as a JSON array. Example:
     "angle": "morning-ritual",
     "headline": "Your 60-second morning unlock",
     "hook": "Stop dragging through your first 3 hours.",
-    "visualPrompt": "Realistic UGC selfie of a 30-something woman at her home desk, morning light streaming through window, holding Natural Stacks Dopamine Brain Food bottle next to her coffee mug, slight smile, natural, no makeup look, iPhone-style photo, slight grain"
+    "visualPrompt": "Realistic UGC selfie of a 30-something woman at her home desk, morning light streaming through window, bottle sitting next to her coffee mug, slight smile, natural no-makeup look, iPhone-style photo, slight grain"
   }
 ]
 
@@ -217,33 +230,78 @@ Return ONLY the JSON array, no other text.`;
 
 /**
  * Get the source image for a creative.
- * - If useUgc and KIE AI is configured → generate via KIE AI
- * - Otherwise, pull a random bottle shot from the Drive folder
- * - Returns null if nothing is available (creative falls back to concept-only)
+ * - useUgc + KIE AI configured + bottle available → image-to-image via KIE AI
+ *   (Claude's prompt drops into a scene; the real bottle is composited in)
+ * - Otherwise → return the raw bottle shot for the simple text-overlay branch
+ * - Returns null if nothing usable is available
  */
-async function getSourceImage(visualPrompt: string, useUgc: boolean): Promise<Buffer | null> {
-  // Try AI-generated UGC first if requested
-  if (useUgc && process.env.KIE_AI_API_KEY) {
-    try {
-      const result = await kieGenerateImage({
-        prompt: visualPrompt,
-        aspectRatio: "9:16",
-      });
-      if (result.imageBuffer) return result.imageBuffer;
-    } catch (err) {
-      console.warn("KIE AI generation failed, falling back to bottle shot:", err);
-    }
-  }
+async function getSourceImage(
+  visualPrompt: string,
+  useUgc: boolean,
+  publicOrigin: string | null
+): Promise<Buffer | null> {
+  let bottle: DriveImage | null = null;
 
-  // Fall back to (or default to) a random bottle shot from Drive
   if (BOTTLES_FOLDER_ID && process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
     try {
-      const image = await pickRandomImage(BOTTLES_FOLDER_ID);
-      if (image) return await downloadImage(image.id);
+      bottle = await pickRandomImage(BOTTLES_FOLDER_ID);
     } catch (err) {
       console.warn("Drive bottle fetch failed:", err);
     }
   }
 
+  // UGC branch — image-to-image with the real bottle as reference
+  if (useUgc && process.env.KIE_AI_API_KEY && bottle && publicOrigin) {
+    try {
+      const bottleUrl = `${publicOrigin}/api/ad-generator/bottle-proxy/${bottle.id}`;
+      const result = await kieGenerateImage({
+        prompt: buildEditPrompt(visualPrompt),
+        referenceImages: [bottleUrl],
+        aspectRatio: "9:16",
+      });
+      if (result.imageBuffer) return result.imageBuffer;
+    } catch (err) {
+      console.warn("KIE AI image-to-image failed, falling back to bottle shot:", err);
+    }
+  }
+
+  // Bottle-shot branch (or any UGC fallback)
+  if (bottle) {
+    try {
+      return await downloadImage(bottle.id);
+    } catch (err) {
+      console.warn("Drive bottle download failed:", err);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Wraps Claude's scene description with explicit image-to-image instructions
+ * so Nano Banana places the *reference bottle* into the new scene rather than
+ * inventing a generic bottle.
+ */
+function buildEditPrompt(visualPrompt: string): string {
+  return [
+    "Take the Natural Stacks Dopamine Brain Food bottle in the reference image and place it naturally into the scene described below.",
+    "Keep the bottle's exact label, color, shape, and branding identical to the reference — do not redesign it.",
+    "Match the scene's lighting and perspective so the bottle looks like it belongs there.",
+    "",
+    "Scene:",
+    visualPrompt,
+  ].join("\n");
+}
+
+/**
+ * Resolve the public origin (scheme + host) of the deployed app so that
+ * external services like KIE AI can fetch our bottle-proxy URL.
+ * Prefers the incoming request headers; falls back to VERCEL_URL.
+ */
+function resolvePublicOrigin(req: NextRequest): string | null {
+  const host = req.headers.get("host");
+  const proto = req.headers.get("x-forwarded-proto") || "https";
+  if (host) return `${proto}://${host}`;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return null;
 }
