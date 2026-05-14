@@ -2,6 +2,7 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
+import DriveFoldersBar from "@/components/DriveFoldersBar";
 import { useBatchDetail } from "@/lib/ad-generator-store";
 import { ANGLES, type AdCreative, type CreativeStatus } from "@/lib/ad-generator-types";
 
@@ -92,6 +93,9 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
           <p className="text-sm text-zunesty-light/60 mt-2 italic">&quot;{batch.notes}&quot;</p>
         )}
       </div>
+
+      {/* Drive folder shortcuts */}
+      <DriveFoldersBar />
 
       {/* Filters */}
       <div className="flex gap-2 flex-wrap">
@@ -220,6 +224,17 @@ function CreativeCard({
 
       <p className="text-sm text-zunesty-light leading-snug font-medium mb-1">{creative.headline}</p>
       <p className="text-xs text-zunesty-light/40 font-mono">{creative.filename}</p>
+
+      {creative.driveUrl && (
+        <a
+          href={creative.driveUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-[10px] text-zunesty-green/80 hover:text-zunesty-green mt-1.5 transition-colors"
+        >
+          View in Drive ↗
+        </a>
+      )}
 
       {creative.complianceFlags.length > 0 && (
         <div className="mt-2 text-xs text-red-400">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import DriveFoldersBar from "@/components/DriveFoldersBar";
 import { useBatches, createBatch } from "@/lib/ad-generator-store";
 import {
   PRODUCTS,
@@ -104,6 +105,11 @@ export default function AdGeneratorPage() {
         >
           + Generate New Batch
         </button>
+      </div>
+
+      {/* Drive folder shortcuts */}
+      <div className="mb-6">
+        <DriveFoldersBar />
       </div>
 
       {/* Status info */}
