@@ -44,7 +44,24 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
     rejected: creatives.filter((c) => c.status === "rejected").length,
   };
 
-  const handleApprove = (id: string) => updateCreativeStatus(id, "approved");
+  const handleApprove = async (id: string) => {
+    // Call the approve endpoint — moves the Drive file from Output → Approved
+    try {
+      const res = await fetch("/api/ad-generator/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creativeId: id, reviewedBy: "Santiago" }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Approve failed");
+      }
+      // Update local state so the UI reflects immediately
+      updateCreativeStatus(id, "approved");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Approve failed");
+    }
+  };
   const handleReject = (id: string) => {
     setRejectingId(id);
     setRejectReason("");
