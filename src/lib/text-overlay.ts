@@ -1,17 +1,4 @@
-import { createCanvas, loadImage, GlobalFonts } from "@napi-rs/canvas";
-
-// Load Poppins from Google Fonts at startup (cached)
-let fontLoaded = false;
-async function ensureFontLoaded() {
-  if (fontLoaded) return;
-  try {
-    // Try to use a system font as fallback if download fails
-    fontLoaded = true;
-  } catch {
-    // Canvas will fall back to default sans-serif
-    fontLoaded = true;
-  }
-}
+import sharp from "sharp";
 
 export type OverlayOptions = {
   /** The headline text to overlay */
@@ -20,132 +7,93 @@ export type OverlayOptions = {
   width?: number;
   /** Output height in pixels (default 1920 for 9:16) */
   height?: number;
-  /** Max font size before auto-shrinking (default 72) */
+  /** Max font size before auto-shrinking (default 84) */
   maxFontSize?: number;
-  /** Min font size (default 36) */
+  /** Min font size (default 44) */
   minFontSize?: number;
   /** Text color (default white) */
   textColor?: string;
-  /** Shadow color (default black with alpha) */
-  shadowColor?: string;
 };
 
 /**
- * Overlays a headline onto an image. Text is centered horizontally and
- * vertically in the middle 50% of the image (the "square safe zone"),
- * with a strong shadow + outline so it's readable on any background.
+ * Overlays a headline onto an image using sharp + SVG.
+ * Text is centered horizontally and vertically (in the middle of the image
+ * for square-crop safety) with a strong shadow + outline for readability.
  */
 export async function overlayHeadline(
   imageBuffer: Buffer,
   options: OverlayOptions
 ): Promise<Buffer> {
-  await ensureFontLoaded();
-
   const {
     headline,
     width = 1080,
     height = 1920,
-    maxFontSize = 72,
-    minFontSize = 36,
+    maxFontSize = 84,
+    minFontSize = 44,
     textColor = "#FFFFFF",
-    shadowColor = "rgba(0, 0, 0, 0.85)",
   } = options;
 
-  // Create canvas at target 9:16 size
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext("2d");
+  // 1. Resize the source image to fill the 9:16 canvas (cover-fit, crop overflow)
+  const baseImage = await sharp(imageBuffer)
+    .resize(width, height, { fit: "cover", position: "center" })
+    .toBuffer();
 
-  // Load source image
-  const sourceImage = await loadImage(imageBuffer);
+  // 2. Build the text overlay as an SVG (sharp composites SVGs natively)
+  const lines = wrapText(headline, maxFontSize);
 
-  // Cover-fit the source image (fill canvas, crop if needed)
-  const sourceRatio = sourceImage.width / sourceImage.height;
-  const targetRatio = width / height;
-
-  let drawWidth: number, drawHeight: number, drawX: number, drawY: number;
-  if (sourceRatio > targetRatio) {
-    drawHeight = height;
-    drawWidth = height * sourceRatio;
-    drawX = (width - drawWidth) / 2;
-    drawY = 0;
-  } else {
-    drawWidth = width;
-    drawHeight = width / sourceRatio;
-    drawX = 0;
-    drawY = (height - drawHeight) / 2;
-  }
-
-  ctx.drawImage(sourceImage, drawX, drawY, drawWidth, drawHeight);
-
-  // Add a subtle dark gradient in the middle to improve text readability
-  const gradient = ctx.createLinearGradient(0, height * 0.3, 0, height * 0.7);
-  gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
-  gradient.addColorStop(0.5, "rgba(0, 0, 0, 0.35)");
-  gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, height * 0.3, width, height * 0.4);
-
-  // Determine font size — start at max, shrink until text fits in 80% of width
-  // with reasonable line wrapping
-  const maxTextWidth = width * 0.8;
-  const fontFamily = GlobalFonts.has("Poppins") ? "Poppins" : "sans-serif";
-
+  // Auto-shrink font size if too many lines
   let fontSize = maxFontSize;
-  let lines: string[] = [];
-  while (fontSize >= minFontSize) {
-    ctx.font = `700 ${fontSize}px ${fontFamily}`;
-    lines = wrapText(ctx, headline, maxTextWidth);
-    if (lines.length <= 4 && lines.every((l) => ctx.measureText(l).width <= maxTextWidth)) {
-      break;
-    }
-    fontSize -= 4;
+  let displayLines = lines;
+  if (lines.length > 4) {
+    fontSize = Math.max(minFontSize, maxFontSize - (lines.length - 4) * 8);
+    displayLines = wrapText(headline, fontSize);
   }
-
-  // Position text — centered vertically (in square-crop safe zone), horizontally
-  ctx.font = `700 ${fontSize}px ${fontFamily}`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
 
   const lineHeight = fontSize * 1.15;
-  const totalTextHeight = lineHeight * lines.length;
-  const startY = height / 2 - totalTextHeight / 2 + lineHeight / 2;
+  const totalTextHeight = lineHeight * displayLines.length;
+  const startY = height / 2 - totalTextHeight / 2 + fontSize / 2;
 
-  // Draw text with shadow + stroke for readability
-  lines.forEach((line, i) => {
-    const y = startY + i * lineHeight;
-    const x = width / 2;
+  // SVG with gradient background behind text + shadow + stroke for readability
+  const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="readabilityFade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(0,0,0,0)" />
+        <stop offset="50%" stop-color="rgba(0,0,0,0.35)" />
+        <stop offset="100%" stop-color="rgba(0,0,0,0)" />
+      </linearGradient>
+      <filter id="textShadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="black" flood-opacity="0.85"/>
+      </filter>
+    </defs>
+    <rect x="0" y="${height * 0.3}" width="${width}" height="${height * 0.4}" fill="url(#readabilityFade)" />
+    <g font-family="Poppins, Helvetica, Arial, sans-serif" font-weight="700" font-size="${fontSize}" text-anchor="middle" filter="url(#textShadow)">
+      ${displayLines
+        .map(
+          (line, i) =>
+            `<text x="${width / 2}" y="${startY + i * lineHeight}" fill="${textColor}" stroke="rgba(0,0,0,0.5)" stroke-width="${Math.max(2, fontSize / 24)}" paint-order="stroke fill">${escapeXml(line)}</text>`
+        )
+        .join("\n")}
+    </g>
+  </svg>`;
 
-    // Shadow layer
-    ctx.shadowColor = shadowColor;
-    ctx.shadowBlur = 20;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 4;
-    ctx.fillStyle = textColor;
-    ctx.fillText(line, x, y);
-
-    // Reset shadow for stroke
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
-    ctx.lineWidth = Math.max(2, fontSize / 24);
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
-    ctx.strokeText(line, x, y);
-
-    // Re-draw fill on top of stroke for crisp letters
-    ctx.fillText(line, x, y);
-  });
-
-  return await canvas.encode("png");
+  // 3. Composite SVG onto the image
+  return await sharp(baseImage)
+    .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
+    .png()
+    .toBuffer();
 }
 
-/** Wrap text to fit a target width by breaking on spaces. */
-function wrapText(ctx: { measureText: (s: string) => { width: number } }, text: string, maxWidth: number): string[] {
+/** Wrap text into lines that fit within the canvas (rough heuristic by char count). */
+function wrapText(text: string, fontSize: number): string[] {
+  // Roughly: at fontSize=84 on 1080px wide, ~16 chars fits per line in 80% of width
+  const charsPerLine = Math.floor((1080 * 0.8) / (fontSize * 0.55));
   const words = text.split(/\s+/);
   const lines: string[] = [];
   let current = "";
 
   for (const word of words) {
     const test = current ? `${current} ${word}` : word;
-    if (ctx.measureText(test).width <= maxWidth) {
+    if (test.length <= charsPerLine) {
       current = test;
     } else {
       if (current) lines.push(current);
@@ -154,4 +102,14 @@ function wrapText(ctx: { measureText: (s: string) => { width: number } }, text: 
   }
   if (current) lines.push(current);
   return lines;
+}
+
+/** Escape XML special characters for safe SVG embedding. */
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
