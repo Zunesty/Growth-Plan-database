@@ -1,56 +1,52 @@
 import { drive_v3, drive } from "@googleapis/drive";
+import { OAuth2Client } from "google-auth-library";
 import { Readable } from "stream";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Auth: API key (current mode)
+// Auth: OAuth refresh token (current mode)
 //
 // Setup:
-//   1. Google Cloud Console → APIs & Services → Credentials → Create API key
-//   2. Restrict the key to "Google Drive API" (Application restrictions optional)
-//   3. Paste into GOOGLE_API_KEY in .env.local + Vercel
+//   1. Google Cloud Console → OAuth consent screen → Internal (Zunesty WS)
+//   2. Credentials → Create OAuth client ID → Web application
+//        Authorized redirect URI: http://localhost:4567/oauth-callback
+//   3. Mint the refresh token locally:
+//        GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... \
+//          node scripts/get-google-refresh-token.mjs
+//   4. Paste GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN
+//      into .env.local + Vercel
 //
-// Limitations of API key auth:
-//   - Works ONLY for files/folders set to "Anyone with the link can view"
-//   - READ-ONLY. Uploads (files.create) and moves (files.update with parents)
-//     will fail with 401/403 — those need OAuth or a service account.
-//   - Anything not public will return 404 (Drive masks 403 as 404 by design).
+// Full Drive access (read + write) under the user who granted consent.
 //
-// To re-enable OAuth (refresh-token flow) for private/write access, restore
-// the commented block below and set the GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
-// / GOOGLE_REFRESH_TOKEN env vars. The helper to mint the refresh token still
-// lives at scripts/get-google-refresh-token.mjs.
+// API-key fallback (for read-only public files) lives in the commented block
+// at the bottom of this function — flip the two blocks if you need to switch.
 // ─────────────────────────────────────────────────────────────────────────────
-
-// import { OAuth2Client } from "google-auth-library";
 
 let cached: drive_v3.Drive | null = null;
 
 function getDriveClient(): drive_v3.Drive {
   if (cached) return cached;
 
-  const apiKey = process.env.GOOGLE_API_KEY;
-  if (!apiKey) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+  if (!clientId || !clientSecret || !refreshToken) {
     throw new Error(
-      "GOOGLE_API_KEY not set. Create an API key in Google Cloud Console, restrict it to the Drive API, then add it to .env.local + Vercel."
+      "Google OAuth env vars missing. Need GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN. " +
+        "Run `node scripts/get-google-refresh-token.mjs` to mint the refresh token."
     );
   }
 
-  cached = drive({ version: "v3", auth: apiKey });
+  const auth = new OAuth2Client(clientId, clientSecret);
+  auth.setCredentials({ refresh_token: refreshToken });
+
+  cached = drive({ version: "v3", auth });
   return cached;
 
-  // ─── OAuth refresh-token mode (legacy / for future private+write access) ───
-  // const clientId = process.env.GOOGLE_CLIENT_ID;
-  // const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  // const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-  // if (!clientId || !clientSecret || !refreshToken) {
-  //   throw new Error(
-  //     "Google OAuth env vars missing. Need GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN. " +
-  //       "Run `node scripts/get-google-refresh-token.mjs` to mint the refresh token."
-  //   );
-  // }
-  // const auth = new OAuth2Client(clientId, clientSecret);
-  // auth.setCredentials({ refresh_token: refreshToken });
-  // cached = drive({ version: "v3", auth });
+  // ─── API-key mode (legacy / read-only public-files fallback) ───────────────
+  // const apiKey = process.env.GOOGLE_API_KEY;
+  // if (!apiKey) throw new Error("GOOGLE_API_KEY not set");
+  // cached = drive({ version: "v3", auth: apiKey });
   // return cached;
 }
 
@@ -64,12 +60,12 @@ function wrapDriveError(err: unknown, context: string): Error {
 
   if (status === 403 || status === 404) {
     return new Error(
-      `${context} failed (HTTP ${status}). With API key auth, the file/folder must be shared as "Anyone with the link can view" — otherwise Drive returns 404 even if it exists. Check the share settings in Google Drive.`
+      `${context} failed (HTTP ${status}). The OAuth user doesn't have access to this file/folder, or the file ID is wrong. Make sure the folder is shared with the account that consented to the OAuth flow.`
     );
   }
   if (status === 401) {
     return new Error(
-      `${context} failed (HTTP 401). The GOOGLE_API_KEY is invalid, expired, or not allowed to call the Drive API. Verify the key in Google Cloud Console.`
+      `${context} failed (HTTP 401). The OAuth token is invalid or expired. Re-mint the refresh token via scripts/get-google-refresh-token.mjs.`
     );
   }
   return err instanceof Error ? err : new Error(`${context} failed: ${String(err)}`);
@@ -125,11 +121,7 @@ export async function pickRandomImage(folderId: string): Promise<DriveImage | nu
   return images[Math.floor(Math.random() * images.length)];
 }
 
-/**
- * Upload an image Buffer to a Drive folder.
- * NOTE: API key auth cannot write to Drive — this will fail with 401/403 in
- * API-key mode. Re-enable OAuth (see top of file) when uploads are needed.
- */
+/** Upload an image Buffer to a Drive folder. Returns the file ID + view URL. */
 export async function uploadImage(
   folderId: string,
   filename: string,
@@ -155,17 +147,11 @@ export async function uploadImage(
       webViewLink: res.data.webViewLink!,
     };
   } catch (err) {
-    throw wrapDriveError(
-      err,
-      `uploadImage(${filename}) — Drive writes require OAuth, not API key`
-    );
+    throw wrapDriveError(err, `uploadImage(${filename})`);
   }
 }
 
-/**
- * Move a file from one folder to another (used by the approve action).
- * NOTE: same write limitation as uploadImage — will fail under API key auth.
- */
+/** Move a file from one Drive folder to another (used for the approve action). */
 export async function moveFile(
   fileId: string,
   fromFolderId: string,
@@ -180,9 +166,6 @@ export async function moveFile(
       fields: "id, parents",
     });
   } catch (err) {
-    throw wrapDriveError(
-      err,
-      `moveFile(${fileId}) — Drive writes require OAuth, not API key`
-    );
+    throw wrapDriveError(err, `moveFile(${fileId})`);
   }
 }
