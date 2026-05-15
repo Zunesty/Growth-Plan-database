@@ -30,9 +30,11 @@ const supabase = createClient(
 const BOTTLES_FOLDER_ID = process.env.DRIVE_BOTTLES_FOLDER_ID;
 const OUTPUT_FOLDER_ID = process.env.DRIVE_OUTPUT_FOLDER_ID;
 
-// How many AI-generated UGC ads per batch (vs. pure bottle-shot ads).
-// Mix gives variety in each batch.
-const UGC_MIX_RATIO = 0.4;
+// Share of creatives that should attempt KIE AI image-to-image (which produces
+// a real scene around the bottle). The rest fall back to a plain bottle shot
+// resized to the canvas. Austin prefers the AI scenes, so we route everything
+// through KIE AI by default — bottle-only is now just the failure fallback.
+const UGC_MIX_RATIO = 1.0;
 
 export async function POST(req: NextRequest) {
   try {
@@ -189,22 +191,42 @@ Winner ${i + 1}:
 
 TASK: Generate ${count} new ad concepts. Each must include:
 - angle: pick ONE from this list — ${ANGLES.map((a) => a.id).join(", ")}
-- headline: short, punchy, max 12 words. Will be overlaid on the image.
-- hook: 1-sentence opening line for context
-- visualPrompt: detailed description of the SCENE that will surround the product bottle. UGC-style, real-looking, NOT stock photo. Include: subject (person, hands, mood), setting, lighting, composition, props. DO NOT describe the bottle itself — a real bottle photo will be composited in. Just describe where it sits and what's around it.
+- includesPerson: true or false (see split rule below)
+- headline: ONE punchy sentence, 5-9 words, max 50 characters. NOT a fragment, NOT a tagline pair. It will be rendered in very large white text on top of the image, so it must read as a single beat.
+- hook: 1-sentence opening line for context (internal — not overlaid)
+- visualPrompt: detailed description of the SCENE that will surround the product bottle. UGC-style, real-looking, iPhone photo aesthetic, NOT stock photo and NOT studio. Include subject, setting, lighting, composition, props. DO NOT describe the bottle itself — a real bottle photo gets composited in. Just describe the scene around it.
+
+PERSON SPLIT — IMPORTANT:
+Of the ${count} concepts, exactly ${Math.ceil(count / 2)} MUST set includesPerson=true and feature a real person interacting with the product in the scene (in their hands, next to them at a desk, on a kitchen counter while they make coffee, etc). The remaining ${Math.floor(count / 2)} should set includesPerson=false and focus on natural environments WITHOUT a person — bottle on a wooden desk next to a laptop, sitting on a bedside table with morning light, on a kitchen counter, on a hiking trail rock, etc.
+
+NATURAL ENVIRONMENTS — preferred scenes:
+- Working at a home desk or coffee shop
+- Studying with books / laptop
+- Morning routine: getting ready, brushing teeth, coffee
+- Going for a walk or hike, outdoors
+- On a wooden table, bedside, kitchen counter, gym bag
+- Soft window light, golden hour, natural daylight
+Avoid: studio lighting, plain backdrops, hands-only awkward shots, anything that screams "stock photo".
 
 COMPLIANCE — DO NOT use any of these words/phrases (FDA risk):
 ${BANNED_WORDS.join(", ")}
-
 Avoid disease/treatment claims. Focus on: focus, motivation, mental drive, productivity, energy, transparency.
 
-Output as a JSON array. Example:
+Output as a JSON array. Examples:
 [
   {
     "angle": "morning-ritual",
-    "headline": "Your 60-second morning unlock",
-    "hook": "Stop dragging through your first 3 hours.",
-    "visualPrompt": "Realistic UGC selfie of a 30-something woman at her home desk, morning light streaming through window, bottle sitting next to her coffee mug, slight smile, natural no-makeup look, iPhone-style photo, slight grain"
+    "includesPerson": true,
+    "headline": "Stop dragging through your mornings.",
+    "hook": "The first 3 hours are everything.",
+    "visualPrompt": "Realistic iPhone photo of a 30-something woman at her home desk, soft morning light through window, mug of coffee in hand, the bottle sitting on the desk next to her laptop, no-makeup natural look, slight grain, candid moment"
+  },
+  {
+    "angle": "study-session",
+    "includesPerson": false,
+    "headline": "Built for the deep-work hours.",
+    "hook": "When the work demands more than caffeine can give.",
+    "visualPrompt": "Cozy iPhone photo of a wooden desk in a sun-lit home office, open notebook with pen, laptop closed, ceramic mug of coffee steaming, bottle sitting beside the notebook, late-afternoon golden light, slight depth-of-field"
   }
 ]
 
@@ -222,6 +244,7 @@ Return ONLY the JSON array, no other text.`;
 
   return JSON.parse(jsonMatch[0]) as Array<{
     angle: AdAngle;
+    includesPerson?: boolean;
     headline: string;
     hook: string;
     visualPrompt: string;

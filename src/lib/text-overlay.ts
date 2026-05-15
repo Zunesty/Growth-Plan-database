@@ -1,8 +1,18 @@
 import sharp from "sharp";
 import path from "path";
 
-const FONT_BOLD = path.join(process.cwd(), "public/fonts/Poppins-Bold.ttf");
-const FONT_EXTRABOLD = path.join(process.cwd(), "public/fonts/Poppins-ExtraBold.ttf");
+// Headline font. Default = Montserrat Variable (free OFL, closest open-source
+// match to Gilroy). Override by dropping a TTF into public/fonts/ and setting
+// HEADLINE_FONT_FILE (e.g. "Gilroy-ExtraBold.ttf") in env. Don't commit
+// commercial fonts — keep them in Vercel env / local-only.
+const HEADLINE_FONT_FILE = process.env.HEADLINE_FONT_FILE || "Montserrat-Variable.ttf";
+const HEADLINE_FONT_PATH = path.join(process.cwd(), "public/fonts", HEADLINE_FONT_FILE);
+
+// Pango "family" name to pair with the font file. With a variable font, Pango
+// reads the family from the file but we still need the descriptor string.
+// HEADLINE_FONT_FAMILY can be overridden if the bundled font has a different
+// internal family name (e.g. "Gilroy", "Inter").
+const HEADLINE_FONT_FAMILY = process.env.HEADLINE_FONT_FAMILY || "Montserrat";
 
 export type OverlayOptions = {
   /** The headline text to overlay */
@@ -11,20 +21,20 @@ export type OverlayOptions = {
   width?: number;
   /** Output height in pixels (default 1920 for 9:16) */
   height?: number;
-  /** Starting font size before auto-shrink (default 92) */
+  /** Starting font size before auto-shrink (default 120) */
   maxFontSize?: number;
-  /** Floor font size (default 56) */
+  /** Floor font size (default 64) */
   minFontSize?: number;
 };
 
 /**
- * Overlays a headline on the top third of the image using sharp's native text
- * composite (Pango + Cairo). This is far more reliable across platforms than
- * SVG <text> + librsvg, which doesn't load custom fonts on Vercel's Linux
- * runtime and renders headlines as fallback fonts or blank.
+ * Overlays a single-sentence headline on the top third of the image using
+ * sharp's native text composite (Pango + Cairo). Far more reliable across
+ * platforms than SVG <text> + librsvg, which can't load custom fonts on
+ * Vercel's Linux runtime.
  *
- * Layout: dark gradient strip across the top 40%, white headline text in the
- * upper area so the bottle/scene below stays the visual anchor.
+ * Layout: dark gradient strip across the top 42%, large white ExtraBold text.
+ * Designed for short, punchy single-sentence headlines (5-9 words).
  */
 export async function overlayHeadline(
   imageBuffer: Buffer,
@@ -34,8 +44,8 @@ export async function overlayHeadline(
     headline,
     width = 1080,
     height = 1920,
-    maxFontSize = 92,
-    minFontSize = 56,
+    maxFontSize = 120,
+    minFontSize = 64,
   } = options;
 
   // 1. Resize the source image to fill the 9:16 canvas
@@ -43,7 +53,7 @@ export async function overlayHeadline(
     .resize(width, height, { fit: "cover", position: "center" })
     .toBuffer();
 
-  // 2. Build a dark gradient strip across the top 40% for readability
+  // 2. Dark gradient strip across the top for legibility on any background
   const gradient = Buffer.from(
     `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -57,9 +67,9 @@ export async function overlayHeadline(
     </svg>`
   );
 
-  // 3. Render the headline via sharp's native text composite (uses Pango)
-  const textBoxWidth = Math.floor(width * 0.88);
-  const textBoxHeight = Math.floor(height * 0.28);
+  // 3. Render the headline via sharp's native text composite (Pango)
+  const textBoxWidth = Math.floor(width * 0.9);
+  const textBoxHeight = Math.floor(height * 0.32);
   const fontSize = chooseFontSize(headline, maxFontSize, minFontSize, textBoxWidth);
 
   const textPangoMarkup = `<span foreground="white" font_weight="800">${escapePangoMarkup(headline)}</span>`;
@@ -68,8 +78,8 @@ export async function overlayHeadline(
   const textBuffer = await sharp({
     text: {
       text: textPangoMarkup,
-      fontfile: FONT_EXTRABOLD,
-      font: `Poppins ${fontSize}`,
+      fontfile: HEADLINE_FONT_PATH,
+      font: `${HEADLINE_FONT_FAMILY} ${fontSize}`,
       width: textBoxWidth,
       height: textBoxHeight,
       align: "center",
@@ -81,12 +91,12 @@ export async function overlayHeadline(
     .png()
     .toBuffer();
 
-  // Soft drop shadow for readability against the gradient
+  // Soft drop shadow behind the text for legibility on busy backgrounds
   const shadowBuffer = await sharp({
     text: {
       text: shadowPangoMarkup,
-      fontfile: FONT_EXTRABOLD,
-      font: `Poppins ${fontSize}`,
+      fontfile: HEADLINE_FONT_PATH,
+      font: `${HEADLINE_FONT_FAMILY} ${fontSize}`,
       width: textBoxWidth,
       height: textBoxHeight,
       align: "center",
@@ -104,7 +114,7 @@ export async function overlayHeadline(
   const textLeft = Math.floor((width - textBoxWidth) / 2);
   const shadowOffset = 5;
 
-  // 5. Composite layers: base → gradient → shadow → text
+  // 5. Composite: base → gradient → shadow → text
   return await sharp(baseImage)
     .composite([
       { input: gradient, top: 0, left: 0 },
@@ -121,9 +131,9 @@ export async function overlayHeadline(
 }
 
 /**
- * Pick a font size that keeps the headline inside the text box without obvious
- * clipping. Approximation: shrink one step for every ~16 chars past the first
- * line's worth.
+ * Pick a font size that keeps the headline inside the text box. Targets a
+ * single-line look at max size; shrinks aggressively if the headline runs
+ * past two lines so it still reads as one beat of text.
  */
 function chooseFontSize(
   text: string,
@@ -132,10 +142,10 @@ function chooseFontSize(
   textBoxWidth: number
 ): number {
   // Rough chars-per-line at maxFontSize (Pango glyph width ~ 0.55 × fontSize)
-  const charsPerLine = Math.floor(textBoxWidth / (maxFontSize * 0.55));
+  const charsPerLine = Math.max(8, Math.floor(textBoxWidth / (maxFontSize * 0.55)));
   const estimatedLines = Math.max(1, Math.ceil(text.length / charsPerLine));
-  // Comfortably fit ~3 lines at maxFontSize; shrink by ~10pt per extra line
-  const shrink = Math.max(0, estimatedLines - 3) * 10;
+  // Comfortable at 2 lines; shrink ~14pt per extra line beyond that
+  const shrink = Math.max(0, estimatedLines - 2) * 14;
   return Math.max(minFontSize, maxFontSize - shrink);
 }
 
@@ -147,10 +157,3 @@ function escapePangoMarkup(text: string): string {
     .replace(/'/g, "&apos;")
     .replace(/"/g, "&quot;");
 }
-
-// Keep this export for compatibility; the bold TTF path is exposed in case
-// other modules want to render text consistently with the overlay.
-export const FONT_PATHS = {
-  bold: FONT_BOLD,
-  extraBold: FONT_EXTRABOLD,
-};
