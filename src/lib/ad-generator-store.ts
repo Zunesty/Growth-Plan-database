@@ -49,6 +49,10 @@ async function upsertCreative(creative: AdCreative) {
   if (error) console.error("Supabase upsert creative error:", error);
 }
 
+// Poll every 5s while a dashboard/detail view is open so in-flight generations
+// surface their progress without the user having to reload.
+const POLL_INTERVAL_MS = 5000;
+
 export function useBatches() {
   const [batches, setBatches] = useState<AdBatch[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -68,9 +72,11 @@ export function useBatches() {
     });
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
+    const poll = setInterval(refresh, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       window.removeEventListener("focus", onFocus);
+      clearInterval(poll);
     };
   }, [refresh]);
 
@@ -95,9 +101,11 @@ export function useBatchDetail(batchId: string) {
     });
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
+    const poll = setInterval(refresh, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       window.removeEventListener("focus", onFocus);
+      clearInterval(poll);
     };
   }, [refresh]);
 

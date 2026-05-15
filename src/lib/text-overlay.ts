@@ -21,9 +21,9 @@ export type OverlayOptions = {
   width?: number;
   /** Output height in pixels (default 1920 for 9:16) */
   height?: number;
-  /** Starting font size before auto-shrink (default 120) */
+  /** Starting font size before auto-shrink (default 96) */
   maxFontSize?: number;
-  /** Floor font size (default 64) */
+  /** Floor font size (default 56) */
   minFontSize?: number;
 };
 
@@ -44,8 +44,8 @@ export async function overlayHeadline(
     headline,
     width = 1080,
     height = 1920,
-    maxFontSize = 120,
-    minFontSize = 64,
+    maxFontSize = 96,
+    minFontSize = 56,
   } = options;
 
   // 1. Resize the source image to fill the 9:16 canvas

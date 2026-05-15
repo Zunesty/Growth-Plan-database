@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import sharp from "sharp";
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -39,6 +40,12 @@ const OUTPUT_FOLDER_ID = process.env.DRIVE_OUTPUT_FOLDER_ID;
 // resized to the canvas. Austin prefers the AI scenes, so we route everything
 // through KIE AI by default — bottle-only is now just the failure fallback.
 const UGC_MIX_RATIO = 1.0;
+
+// Of the KIE AI creatives, share that should have the headline RENDERED by
+// KIE AI inside the image (text baked into the scene) vs. our sharp overlay
+// (guaranteed perfect text). 50/50 gives variety + a typography safety net
+// since Nano Banana can misspell longer headlines.
+const KIE_TEXT_RATIO = 0.5;
 
 export async function POST(req: NextRequest) {
   try {
@@ -169,16 +176,28 @@ async function processCreative(
   if (flags.length === 0) {
     try {
       const useUgc = Math.random() < UGC_MIX_RATIO;
+      // Only ask KIE AI to draw the headline when we're going through KIE AI
+      // anyway — the bottle-only fallback always uses sharp's overlay.
+      const renderTextInKie = useUgc && Math.random() < KIE_TEXT_RATIO;
+
       const sourceImage = await getSourceImage(
         concept.visualPrompt,
         useUgc,
-        publicOrigin
+        publicOrigin,
+        renderTextInKie ? concept.headline : undefined
       );
 
       if (sourceImage) {
-        const finalBuffer = await overlayHeadline(sourceImage, {
-          headline: concept.headline,
-        });
+        // If KIE AI baked the headline into the image, just normalize to the
+        // 9:16 canvas. Otherwise composite our sharp overlay on top.
+        const finalBuffer = renderTextInKie
+          ? await sharp(sourceImage)
+              .resize(1080, 1920, { fit: "cover", position: "center" })
+              .png()
+              .toBuffer()
+          : await overlayHeadline(sourceImage, {
+              headline: concept.headline,
+            });
 
         if (OUTPUT_FOLDER_ID) {
           const uploaded = await uploadImage(
@@ -301,14 +320,17 @@ Return ONLY the JSON array, no other text.`;
 /**
  * Get the source image for a creative.
  * - useUgc + KIE AI configured + bottle available → image-to-image via KIE AI
- *   (Claude's prompt drops into a scene; the real bottle is composited in)
- * - Otherwise → return the raw bottle shot for the simple text-overlay branch
- * - Returns null if nothing usable is available
+ *   (Claude's prompt drops into a scene; the real bottle is composited in).
+ *   If `embedHeadline` is provided, KIE AI is also asked to render that
+ *   headline as text inside the image — our sharp overlay is then skipped.
+ * - Otherwise → return the raw bottle shot for the simple text-overlay branch.
+ * - Returns null if nothing usable is available.
  */
 async function getSourceImage(
   visualPrompt: string,
   useUgc: boolean,
-  publicOrigin: string | null
+  publicOrigin: string | null,
+  embedHeadline?: string
 ): Promise<Buffer | null> {
   let bottle: DriveImage | null = null;
 
@@ -325,7 +347,7 @@ async function getSourceImage(
     try {
       const bottleUrl = `${publicOrigin}/api/ad-generator/bottle-proxy/${bottle.id}`;
       const result = await kieGenerateImage({
-        prompt: buildEditPrompt(visualPrompt),
+        prompt: buildEditPrompt(visualPrompt, embedHeadline),
         referenceImages: [bottleUrl],
         aspectRatio: "9:16",
       });
@@ -350,14 +372,28 @@ async function getSourceImage(
 /**
  * Wraps Claude's scene description with explicit image-to-image instructions
  * so Nano Banana places the *reference bottle* into the new scene rather than
- * inventing a generic bottle.
+ * inventing a generic bottle. If `headline` is provided, also instructs KIE
+ * AI to render that headline as large bold white text in the image.
  */
-function buildEditPrompt(visualPrompt: string): string {
-  return [
+function buildEditPrompt(visualPrompt: string, headline?: string): string {
+  const parts = [
     "Take the Natural Stacks Dopamine Brain Food bottle in the reference image and place it naturally into the scene described below.",
     "Keep the bottle's exact label, color, shape, and branding identical to the reference — do not redesign it.",
     "Match the scene's lighting and perspective so the bottle looks like it belongs there.",
-    "",
+  ];
+
+  if (headline) {
+    parts.push(
+      "",
+      `Render this exact headline as large bold white text near the top of the image: "${headline}".`,
+      "Use one or two lines, sans-serif, high contrast against the background. No other text anywhere in the image.",
+      "Spell the headline EXACTLY as written — do not paraphrase or change any words."
+    );
+  }
+
+  parts.push("");
+  return [
+    ...parts,
     "Scene:",
     visualPrompt,
   ].join("\n");
