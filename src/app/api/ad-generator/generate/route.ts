@@ -242,7 +242,7 @@ async function getSourceImage(
 ): Promise<Buffer | null> {
   let bottle: DriveImage | null = null;
 
-  if (BOTTLES_FOLDER_ID && process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+  if (BOTTLES_FOLDER_ID && process.env.GOOGLE_API_KEY) {
     try {
       bottle = await pickRandomImage(BOTTLES_FOLDER_ID);
     } catch (err) {
