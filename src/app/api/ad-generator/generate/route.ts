@@ -18,6 +18,10 @@ import {
 import { overlayHeadline } from "@/lib/text-overlay";
 import { generateImage as kieGenerateImage } from "@/lib/kie-ai";
 
+// Allow the function to run long enough to finish a batch of ~20 KIE AI calls.
+// Pro plan w/ fluid compute caps at 300s. Hobby caps at 60s — adjust if needed.
+export const maxDuration = 300;
+
 const anthropic = new Anthropic();
 
 const supabase = createClient(
@@ -53,79 +57,34 @@ export async function POST(req: NextRequest) {
     // 1. Use Claude to ideate ad concepts grounded in the winners
     const concepts = await ideateConcepts(winners, count);
 
-    // 2. For each concept, generate the image + overlay text + upload to Drive
-    const creatives: AdCreative[] = [];
-    for (let i = 0; i < concepts.length; i++) {
-      const concept = concepts[i];
+    // 2. Process all concepts in parallel. Each KIE AI call is ~30s; running
+    //    them sequentially blows past Vercel's function timeout for any batch
+    //    of more than 1-2. Promise.allSettled isolates per-creative failures.
+    const settled = await Promise.allSettled(
+      concepts.map((concept, i) =>
+        processCreative(concept, i, batchId, publicOrigin)
+      )
+    );
 
-      // Compliance check on the headline + hook
-      const flags = BANNED_WORDS.filter((w) =>
-        `${concept.headline} ${concept.hook}`.toLowerCase().includes(w.toLowerCase())
-      );
-
-      const creative: AdCreative = {
+    const creatives: AdCreative[] = settled.map((r, i) => {
+      if (r.status === "fulfilled") return r.value;
+      // Hard failure (not caught by the per-creative try). Mint a minimal
+      // failed-creative record so the count still reflects the attempt.
+      console.error(`Creative ${i} rejected:`, r.reason);
+      return {
         id: `creative-${batchId}-${i}-${Date.now()}`,
         batchId,
         product: "dopamine-brain-food",
-        angle: concept.angle,
-        filename: `static_${concept.angle}_${i + 1}.png`,
-        headline: concept.headline,
-        status: flags.length > 0 ? "rejected" : "generating",
-        complianceFlags: flags,
-        rejectionReason: flags.length > 0 ? `Compliance: contains "${flags[0]}"` : undefined,
+        angle: concepts[i].angle,
+        filename: `static_${concepts[i].angle}_${i + 1}.png`,
+        headline: concepts[i].headline,
+        status: "failed",
+        complianceFlags: [],
+        rejectionReason:
+          r.reason instanceof Error ? r.reason.message : String(r.reason),
         createdAt: new Date().toISOString(),
       };
-
-      // Skip image gen if compliance failed
-      if (flags.length === 0) {
-        try {
-          // Decide image source: bottle-shot vs. AI UGC (image-to-image)
-          const useUgc = Math.random() < UGC_MIX_RATIO;
-          const sourceImage = await getSourceImage(
-            concept.visualPrompt,
-            useUgc,
-            publicOrigin
-          );
-
-          if (sourceImage) {
-            const finalBuffer = await overlayHeadline(sourceImage, {
-              headline: concept.headline,
-            });
-
-            // Upload to Drive output folder (if configured)
-            if (OUTPUT_FOLDER_ID) {
-              const uploaded = await uploadImage(
-                OUTPUT_FOLDER_ID,
-                creative.filename,
-                finalBuffer
-              );
-              creative.driveFileId = uploaded.id;
-              creative.driveUrl = uploaded.webViewLink;
-              creative.finalImageUrl = uploaded.webViewLink;
-            }
-            creative.status = "ready";
-          } else {
-            // No image source available — leave in "ready" state with concept only
-            creative.status = "ready";
-          }
-        } catch (genErr) {
-          console.error(`Image gen failed for creative ${creative.id}:`, genErr);
-          creative.status = "failed";
-          creative.rejectionReason =
-            genErr instanceof Error ? genErr.message : "Image generation failed";
-        }
-      }
-
-      creatives.push(creative);
-
-      // Persist as we go so the UI can show progress
-      await supabase.from("ad_creatives").upsert({
-        id: creative.id,
-        batch_id: creative.batchId,
-        data: creative,
-        updated_at: new Date().toISOString(),
-      });
-    }
+    });
 
     // 3. Update batch status
     const batchUpdate: Partial<AdBatch> = {
@@ -168,6 +127,94 @@ export async function POST(req: NextRequest) {
 // ───────────────────────────────────────────────────────────────────────────
 // Helpers
 // ───────────────────────────────────────────────────────────────────────────
+
+type Concept = {
+  angle: AdAngle;
+  includesPerson?: boolean;
+  headline: string;
+  hook: string;
+  visualPrompt: string;
+};
+
+/**
+ * Generate one creative end-to-end: compliance check → KIE AI image-to-image
+ * (or bottle-shot fallback) → headline overlay → Drive upload → Supabase
+ * upsert. Returns the resulting AdCreative regardless of outcome (failed
+ * creatives carry a rejectionReason).
+ */
+async function processCreative(
+  concept: Concept,
+  index: number,
+  batchId: string,
+  publicOrigin: string | null
+): Promise<AdCreative> {
+  const flags = BANNED_WORDS.filter((w) =>
+    `${concept.headline} ${concept.hook}`.toLowerCase().includes(w.toLowerCase())
+  );
+
+  const creative: AdCreative = {
+    id: `creative-${batchId}-${index}-${Date.now()}`,
+    batchId,
+    product: "dopamine-brain-food",
+    angle: concept.angle,
+    filename: `static_${concept.angle}_${index + 1}.png`,
+    headline: concept.headline,
+    status: flags.length > 0 ? "rejected" : "generating",
+    complianceFlags: flags,
+    rejectionReason:
+      flags.length > 0 ? `Compliance: contains "${flags[0]}"` : undefined,
+    createdAt: new Date().toISOString(),
+  };
+
+  if (flags.length === 0) {
+    try {
+      const useUgc = Math.random() < UGC_MIX_RATIO;
+      const sourceImage = await getSourceImage(
+        concept.visualPrompt,
+        useUgc,
+        publicOrigin
+      );
+
+      if (sourceImage) {
+        const finalBuffer = await overlayHeadline(sourceImage, {
+          headline: concept.headline,
+        });
+
+        if (OUTPUT_FOLDER_ID) {
+          const uploaded = await uploadImage(
+            OUTPUT_FOLDER_ID,
+            creative.filename,
+            finalBuffer
+          );
+          creative.driveFileId = uploaded.id;
+          creative.driveUrl = uploaded.webViewLink;
+          creative.finalImageUrl = uploaded.webViewLink;
+        }
+      }
+      creative.status = "ready";
+    } catch (genErr) {
+      console.error(`Image gen failed for creative ${creative.id}:`, genErr);
+      creative.status = "failed";
+      creative.rejectionReason =
+        genErr instanceof Error ? genErr.message : "Image generation failed";
+    }
+  }
+
+  // Persist the result. Wrap so a Supabase glitch on one creative doesn't kill
+  // the whole batch — the in-memory creative is still returned.
+  try {
+    await supabase.from("ad_creatives").upsert({
+      id: creative.id,
+      batch_id: creative.batchId,
+      data: creative,
+      updated_at: new Date().toISOString(),
+    });
+  } catch (dbErr) {
+    console.error(`Supabase upsert failed for creative ${creative.id}:`, dbErr);
+  }
+
+  return creative;
+}
 
 async function ideateConcepts(winners: WinningAd[], count: number) {
   const ideationPrompt = `You are a senior performance marketing strategist for Natural Stacks, a premium nootropic brand.
