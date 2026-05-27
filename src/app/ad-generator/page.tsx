@@ -66,11 +66,9 @@ export default function AdGeneratorPage() {
         throw new Error(err.error || "Generation failed");
       }
 
-      if (source === "mock") {
-        alert(
-          "Batch created using mock Triple Whale data. Once we wire up the real API, batches will pull live winning ads."
-        );
-      }
+      // Note: Triple Whale is still mocked. We surface that in the new-batch
+      // modal copy rather than a blocking alert that confused Austin.
+      void source;
 
       setShowNewBatch(false);
       setNotes("");
