@@ -200,20 +200,39 @@ function CreativeCard({
           : "border-zunesty-green-dark/30 bg-zunesty-green-darkest/20"
       }`}
     >
-      {/* Image preview placeholder — will show real image once generated */}
-      <div className="aspect-[9/16] rounded-lg bg-zunesty-green-darkest/60 border border-zunesty-green-dark/20 flex items-center justify-center mb-3 overflow-hidden">
-        {creative.finalImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={creative.finalImageUrl} alt={creative.headline} className="w-full h-full object-cover" />
-        ) : (
+      {/* Image preview — clicking opens the Drive file in a new tab. Image bytes
+          come from our authenticated proxy because Drive's webViewLink is an
+          HTML viewer page, not an <img>-friendly URL. */}
+      {creative.driveFileId && creative.driveUrl ? (
+        <a
+          href={creative.driveUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block aspect-[9/16] rounded-lg bg-zunesty-green-darkest/60 border border-zunesty-green-dark/20 mb-3 overflow-hidden group/img relative"
+          title="Open in Google Drive"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/ad-generator/bottle-proxy/${creative.driveFileId}`}
+            alt={creative.headline}
+            className="w-full h-full object-cover transition-transform group-hover/img:scale-[1.02]"
+          />
+          <div className="absolute inset-0 bg-zunesty-black/0 group-hover/img:bg-zunesty-black/20 transition-colors flex items-center justify-center">
+            <span className="opacity-0 group-hover/img:opacity-100 transition-opacity text-xs font-semibold bg-zunesty-black/70 text-zunesty-light px-2 py-1 rounded">
+              Open in Drive ↗
+            </span>
+          </div>
+        </a>
+      ) : (
+        <div className="aspect-[9/16] rounded-lg bg-zunesty-green-darkest/60 border border-zunesty-green-dark/20 flex items-center justify-center mb-3 overflow-hidden">
           <div className="text-center px-3">
             <p className="text-zunesty-green text-sm font-bold mb-2 leading-tight">
               &ldquo;{creative.headline}&rdquo;
             </p>
             <p className="text-xs text-zunesty-light/30">Image generation pending</p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="flex items-start justify-between gap-2 mb-2">
         <span className="text-[10px] font-medium text-zunesty-green/80 uppercase tracking-wider">
