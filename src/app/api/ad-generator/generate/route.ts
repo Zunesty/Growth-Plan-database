@@ -74,8 +74,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Display name for the selected product (or generic when "all").
+    // Threaded into Claude + KIE AI prompts so NeuroFuel / MagTech batches
+    // get product-appropriate copy + image direction instead of Dopamine-only.
+    const productLabel =
+      product === "all"
+        ? "Natural Stacks supplements"
+        : PRODUCTS.find((p) => p.id === product)?.name || "Natural Stacks supplement";
+
     // 1. Use Claude to ideate ad concepts grounded in the winners
-    const concepts = await ideateConcepts(winners, count);
+    const concepts = await ideateConcepts(winners, count, productLabel);
 
     // 2. Process all concepts in parallel. Each KIE AI call is ~30s; running
     //    them sequentially blows past Vercel's function timeout for any batch
@@ -250,10 +258,14 @@ async function processCreative(
   return creative;
 }
 
-async function ideateConcepts(winners: WinningAd[], count: number) {
+async function ideateConcepts(
+  winners: WinningAd[],
+  count: number,
+  productLabel: string
+) {
   const ideationPrompt = `You are a senior performance marketing strategist for Natural Stacks, a premium nootropic brand.
 
-Product: Dopamine Brain Food (650mg L-Tyrosine + B-vitamins for focus & motivation)
+Product: ${productLabel}
 Brand voice: Open-source, transparent, biohacker-friendly, science-backed but human
 
 Below are ${winners.length} ads currently winning in the Meta account (CPA ≤ $70). Use them as PATTERNS — same angles, hooks, and visual styles that are working — but generate fresh variations.
@@ -390,8 +402,8 @@ async function getSourceImage(
  */
 function buildEditPrompt(visualPrompt: string, headline?: string): string {
   const parts = [
-    "Take the Natural Stacks Dopamine Brain Food bottle in the reference image and place it naturally into the scene described below.",
-    "Keep the bottle's exact label, color, shape, and branding identical to the reference — do not redesign it.",
+    "Take the supplement bottle shown in the reference image and place it naturally into the scene described below.",
+    "Keep the bottle's exact label, color, shape, and branding identical to the reference — do not redesign or rename it.",
     "Match the scene's lighting and perspective so the bottle looks like it belongs there.",
   ];
 

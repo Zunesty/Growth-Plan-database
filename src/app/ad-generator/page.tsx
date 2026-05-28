@@ -9,7 +9,6 @@ import {
   type AdBatch,
   type AdProductSelection,
   type WinningAd,
-  WINNER_CRITERIA,
 } from "@/lib/ad-generator-types";
 
 type BottlePreview = {
@@ -294,13 +293,6 @@ export default function AdGeneratorPage() {
                 />
               </div>
 
-              <div className="rounded-lg border border-zunesty-green-dark/30 bg-zunesty-green-darkest/40 p-3 text-xs text-zunesty-light/60">
-                <p className="font-medium text-zunesty-green mb-1">Winner criteria</p>
-                <p>
-                  CPA ≤ ${WINNER_CRITERIA.maxCPA}, min {WINNER_CRITERIA.minSales} sales, last{" "}
-                  {WINNER_CRITERIA.lookbackDays} days
-                </p>
-              </div>
             </div>
 
             <div className="flex gap-2 justify-end mt-6">

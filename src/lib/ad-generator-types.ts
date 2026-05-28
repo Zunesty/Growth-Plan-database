@@ -30,13 +30,13 @@ export const PRODUCTS: {
     id: "neurofuel",
     name: "NeuroFuel",
     bottleFolderName: "NeuroFuel",
-    active: false,
+    active: true,
   },
   {
     id: "magtech",
     name: "MagTech",
     bottleFolderName: "MagTech",
-    active: false,
+    active: true,
   },
 ];
 
