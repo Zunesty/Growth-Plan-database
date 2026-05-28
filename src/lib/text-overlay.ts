@@ -109,8 +109,11 @@ export async function overlayHeadline(
     .png()
     .toBuffer();
 
-  // 4. Position the text in the top third
-  const textTop = Math.floor(height * 0.08);
+  // 4. Position the text in the upper area but inside Instagram's safe zone.
+  // Story / Reels reserve roughly the top ~15% for the username overlay and
+  // the bottom ~20% for action buttons. Starting the headline at 15% of the
+  // height keeps it clear of the username bar while staying near the top.
+  const textTop = Math.floor(height * 0.15);
   const textLeft = Math.floor((width - textBoxWidth) / 2);
   const shadowOffset = 5;
 

@@ -9,6 +9,7 @@ import {
   type AdAngle,
   type AdBatch,
   type AdCreative,
+  type ProductConfig,
   type WinningAd,
 } from "@/lib/ad-generator-types";
 import {
@@ -75,13 +76,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Display name for the selected product (or generic when "all").
-    // Threaded into Claude + KIE AI prompts so NeuroFuel / MagTech batches
-    // get product-appropriate copy + image direction instead of Dopamine-only.
-    const productLabel =
-      product === "all"
-        ? "Natural Stacks supplements"
-        : PRODUCTS.find((p) => p.id === product)?.name || "Natural Stacks supplement";
+    // Resolve product context. For "all" we pass null and the prompt uses a
+    // generic Natural Stacks framing instead of one product's specifics.
+    const productConfig =
+      product === "all" ? null : PRODUCTS.find((p) => p.id === product) || null;
+    const productLabel = productConfig?.name || "Natural Stacks supplements";
 
     // Create a per-batch Drive subfolder inside DRIVE_OUTPUT_FOLDER_ID, named
     // with the date/time + product (e.g. "2026-05-28_14-30 NeuroFuel"). All
@@ -104,7 +103,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Use Claude to ideate ad concepts grounded in the winners
-    const concepts = await ideateConcepts(winners, count, productLabel);
+    const concepts = await ideateConcepts(winners, count, productConfig);
 
     // 2. Process all concepts in parallel. Each KIE AI call is ~30s; running
     //    them sequentially blows past Vercel's function timeout for any batch
@@ -294,12 +293,27 @@ async function processCreative(
 async function ideateConcepts(
   winners: WinningAd[],
   count: number,
-  productLabel: string
+  productConfig: ProductConfig | null
 ) {
+  const productBlock = productConfig
+    ? `Product: ${productConfig.name}
+Tagline: ${productConfig.tagline}
+Active ingredients (for your context, NEVER claim in copy): ${productConfig.activeIngredients}
+
+Allowed benefit language (lean on these — they're FDA structure-function safe):
+${productConfig.benefitClaims.map((b) => `- ${b}`).join("\n")}
+
+Themes that fit this product:
+${productConfig.themes.map((t) => `- ${t}`).join("\n")}`
+    : `Product: Natural Stacks supplements (mixed batch — concepts can lean toward any of: Dopamine Brain Food for motivation/mood, NeuroFuel for focus/memory, MagTech for sleep/relaxation). Pick the slant that fits each concept.`;
+
   const ideationPrompt = `You are a senior performance marketing strategist for Natural Stacks, a premium nootropic brand.
 
-Product: ${productLabel}
-Brand voice: Open-source, transparent, biohacker-friendly, science-backed but human
+${productBlock}
+
+Brand voice: Open-source, transparent, biohacker-friendly, science-backed but human.
+
+PLACEMENT: These ads will run on INSTAGRAM (Story / Reels / Feed). They must look like native Instagram content — iPhone photos, real environments, no stock-photo polish. Think: a post a real Natural Stacks customer would share.
 
 Below are ${winners.length} ads currently winning in the Meta account (CPA ≤ $70). Use them as PATTERNS — same angles, hooks, and visual styles that are working — but generate fresh variations.
 
@@ -318,25 +332,33 @@ Winner ${i + 1}:
 TASK: Generate ${count} new ad concepts. Each must include:
 - angle: pick ONE from this list — ${ANGLES.map((a) => a.id).join(", ")}
 - includesPerson: true or false (see split rule below)
-- headline: ONE punchy sentence, 5-9 words, max 50 characters. NOT a fragment, NOT a tagline pair. It will be rendered in very large white text on top of the image, so it must read as a single beat.
+- headline: ONE punchy sentence, 5-9 words, max 50 characters. NOT a fragment, NOT a tagline pair. It will be rendered in very large white text on top of the image, so it must read as a single beat. The headline must connect to this product specifically — use the allowed benefit language, not generic claims that fit another product.
 - hook: 1-sentence opening line for context (internal — not overlaid)
-- visualPrompt: detailed description of the SCENE that will surround the product bottle. UGC-style, real-looking, iPhone photo aesthetic, NOT stock photo and NOT studio. Include subject, setting, lighting, composition, props. DO NOT describe the bottle itself — a real bottle photo gets composited in. Just describe the scene around it.
+- visualPrompt: detailed description of the SCENE that will surround the product bottle. UGC-style, real-looking, iPhone photo aesthetic, NOT stock photo and NOT studio. Include subject, setting, lighting, composition, props. The scene should fit one of the product's themes above. DO NOT describe the bottle itself — a real bottle photo gets composited in. Just describe the scene around it.
 
 PERSON SPLIT — IMPORTANT:
-Of the ${count} concepts, exactly ${Math.ceil(count / 2)} MUST set includesPerson=true and feature a real person interacting with the product in the scene (in their hands, next to them at a desk, on a kitchen counter while they make coffee, etc). The remaining ${Math.floor(count / 2)} should set includesPerson=false and focus on natural environments WITHOUT a person — bottle on a wooden desk next to a laptop, sitting on a bedside table with morning light, on a kitchen counter, on a hiking trail rock, etc.
+Of the ${count} concepts, exactly ${Math.ceil(count / 2)} MUST set includesPerson=true and feature a real person fitting the product's themes (e.g. focused at desk for NeuroFuel, winding down in bed for MagTech, getting after their morning for Dopamine Brain Food). The remaining ${Math.floor(count / 2)} should set includesPerson=false and focus on natural environments WITHOUT a person — bottle on a desk, kitchen counter, bedside table, gym bag, etc, again fitting the product's themes.
 
-NATURAL ENVIRONMENTS — preferred scenes:
-- Working at a home desk or coffee shop
-- Studying with books / laptop
-- Morning routine: getting ready, brushing teeth, coffee
-- Going for a walk or hike, outdoors
-- On a wooden table, bedside, kitchen counter, gym bag
-- Soft window light, golden hour, natural daylight
+SCENE COMPOSITION FOR INSTAGRAM — IMPORTANT:
+- This is a 9:16 vertical image (Instagram Story / Reels). Compose for vertical viewing.
+- Leave the TOP THIRD of the frame as relatively empty / clean background space. The headline text will be overlaid there, and it must NOT cross any person's face, hands, or the product bottle. Put the subject and bottle in the middle / lower half.
+- Keep the very top ~15% and very bottom ~20% of the frame as clean margin where Instagram's UI overlays (username, swipe-up, send button) sit.
+
+PREFERRED ENVIRONMENTS (pick what fits the product):
+- Home desk, coffee shop, sunlit window seat (focus / motivation products)
+- Bedside table, soft evening light, cozy bedroom, post-shower wind-down (sleep / relaxation products)
+- Morning kitchen with coffee, brushing teeth, getting ready (morning products)
+- Going for a walk, hiking trail rock, gym bag in a car (active products)
+- Wooden tables, ceramic mugs, real books, AirPods, notebooks as props
 Avoid: studio lighting, plain backdrops, hands-only awkward shots, anything that screams "stock photo".
 
-COMPLIANCE — DO NOT use any of these words/phrases (FDA risk):
+COMPLIANCE — FDA structure-function rules (21 CFR 101.93):
+- These are dietary supplements. We CANNOT claim to diagnose, treat, cure, mitigate, or prevent any disease.
+- Use "supports", "helps maintain", "promotes" — never "treats", "cures", "fixes", "reverses".
+- Do NOT mention any specific disease, drug name, or drug category.
+- Do NOT claim FDA approval, guaranteed results, miracle effects, or "no side effects".
+- BANNED words/phrases (immediate reject — do NOT use any of these):
 ${BANNED_WORDS.join(", ")}
-Avoid disease/treatment claims. Focus on: focus, motivation, mental drive, productivity, energy, transparency.
 
 Output as a JSON array. Examples:
 [
@@ -443,9 +465,13 @@ function buildEditPrompt(visualPrompt: string, headline?: string): string {
   if (headline) {
     parts.push(
       "",
-      `Render this exact headline as large bold white text near the top of the image: "${headline}".`,
+      `Render this exact headline as large bold white text in the UPPER portion of the image: "${headline}".`,
       "Use one or two lines, sans-serif, high contrast against the background. No other text anywhere in the image.",
-      "Spell the headline EXACTLY as written — do not paraphrase or change any words."
+      "Spell the headline EXACTLY as written — do not paraphrase or change any words.",
+      "CRITICAL placement rules — these are non-negotiable:",
+      "- Position the text in EMPTY background space. NEVER place text overlapping any person's face, hands, or the product bottle.",
+      "- Place the text in the top portion of the image, ABOVE any person or subject. If the person is positioned high in the frame, move the text into the empty sky / wall / ceiling area above them.",
+      "- This image is for Instagram (Story / Reels). Keep the text within the central 70% vertical band: avoid the very top ~15% and very bottom ~20% of the frame where Instagram overlays the username and action buttons."
     );
   }
 
