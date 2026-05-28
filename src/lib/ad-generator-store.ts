@@ -36,7 +36,10 @@ async function upsertBatch(batch: AdBatch) {
   const { error } = await supabase
     .from(BATCH_TABLE)
     .upsert({ id: batch.id, data: batch, updated_at: new Date().toISOString() });
-  if (error) console.error("Supabase upsert batch error:", error);
+  if (error) {
+    console.error("Supabase upsert batch error:", error);
+    throw new Error(`Failed to save batch to Supabase: ${error.message}`);
+  }
 }
 
 async function upsertCreative(creative: AdCreative) {
@@ -46,7 +49,10 @@ async function upsertCreative(creative: AdCreative) {
     data: creative,
     updated_at: new Date().toISOString(),
   });
-  if (error) console.error("Supabase upsert creative error:", error);
+  if (error) {
+    console.error("Supabase upsert creative error:", error);
+    throw new Error(`Failed to save creative to Supabase: ${error.message}`);
+  }
 }
 
 // Poll every 5s while a dashboard/detail view is open so in-flight generations
