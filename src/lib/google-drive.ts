@@ -79,6 +79,31 @@ export type DriveImage = {
   webContentLink?: string;
 };
 
+/**
+ * Find a subfolder by exact name inside a parent folder. Returns the
+ * subfolder's Drive ID, or null if no folder with that name exists.
+ * Drive folder names are case-sensitive on the API side.
+ */
+export async function findSubfolder(
+  parentFolderId: string,
+  name: string
+): Promise<string | null> {
+  const d = getDriveClient();
+  try {
+    // Escape single quotes in the name for the Drive query DSL
+    const safeName = name.replace(/'/g, "\\'");
+    const res = await d.files.list({
+      q: `'${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and name = '${safeName}' and trashed = false`,
+      fields: "files(id, name)",
+      pageSize: 1,
+    });
+    const folder = res.data.files?.[0];
+    return folder?.id || null;
+  } catch (err) {
+    throw wrapDriveError(err, `findSubfolder(${parentFolderId}, ${name})`);
+  }
+}
+
 /** List image files inside a Drive folder. Folder must be public. */
 export async function listImagesInFolder(folderId: string): Promise<DriveImage[]> {
   const d = getDriveClient();

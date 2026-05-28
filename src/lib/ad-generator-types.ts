@@ -3,10 +3,35 @@
 
 export type AdProduct = "dopamine-brain-food" | "neurofuel" | "magtech";
 
-export const PRODUCTS: { id: AdProduct; name: string; active: boolean }[] = [
-  { id: "dopamine-brain-food", name: "Dopamine Brain Food", active: true },
-  { id: "neurofuel", name: "NeuroFuel", active: false },
-  { id: "magtech", name: "MagTech", active: false },
+export const PRODUCTS: {
+  id: AdProduct;
+  name: string;
+  /**
+   * Exact Drive subfolder name inside DRIVE_BOTTLES_FOLDER_ID where this
+   * product's reference images live. Must match the folder name in Drive
+   * exactly (case-sensitive).
+   */
+  bottleFolderName: string;
+  active: boolean;
+}[] = [
+  {
+    id: "dopamine-brain-food",
+    name: "Dopamine Brain Food",
+    bottleFolderName: "DopamineBrainFood",
+    active: true,
+  },
+  {
+    id: "neurofuel",
+    name: "NeuroFuel",
+    bottleFolderName: "NeuroFuel",
+    active: false,
+  },
+  {
+    id: "magtech",
+    name: "MagTech",
+    bottleFolderName: "MagTech",
+    active: false,
+  },
 ];
 
 // "Winner" criteria — when does an ad in the account count as a winning seed?
