@@ -16,6 +16,7 @@ import {
   uploadImage,
   findSubfolder,
   listImagesInFolder,
+  createFolder,
   type DriveImage,
 } from "@/lib/google-drive";
 import { overlayHeadline } from "@/lib/text-overlay";
@@ -82,15 +83,43 @@ export async function POST(req: NextRequest) {
         ? "Natural Stacks supplements"
         : PRODUCTS.find((p) => p.id === product)?.name || "Natural Stacks supplement";
 
+    // Create a per-batch Drive subfolder inside DRIVE_OUTPUT_FOLDER_ID, named
+    // with the date/time + product (e.g. "2026-05-28_14-30 NeuroFuel"). All
+    // creatives in this batch upload into this folder so each run is its own
+    // bucket in Drive instead of one ever-growing pile.
+    let batchOutputFolderId: string | null = null;
+    let batchOutputFolderUrl: string | null = null;
+    if (OUTPUT_FOLDER_ID && process.env.GOOGLE_REFRESH_TOKEN) {
+      try {
+        const folderName = formatBatchFolderName(productLabel);
+        const folder = await createFolder(OUTPUT_FOLDER_ID, folderName);
+        batchOutputFolderId = folder.id;
+        batchOutputFolderUrl = folder.webViewLink;
+      } catch (err) {
+        console.warn(
+          "Failed to create batch output subfolder, falling back to root:",
+          err
+        );
+      }
+    }
+
     // 1. Use Claude to ideate ad concepts grounded in the winners
     const concepts = await ideateConcepts(winners, count, productLabel);
 
     // 2. Process all concepts in parallel. Each KIE AI call is ~30s; running
     //    them sequentially blows past Vercel's function timeout for any batch
     //    of more than 1-2. Promise.allSettled isolates per-creative failures.
+    const uploadFolderId = batchOutputFolderId || OUTPUT_FOLDER_ID || null;
     const settled = await Promise.allSettled(
       concepts.map((concept, i) =>
-        processCreative(concept, i, batchId, publicOrigin, bottles)
+        processCreative(
+          concept,
+          i,
+          batchId,
+          publicOrigin,
+          bottles,
+          uploadFolderId
+        )
       )
     );
 
@@ -114,10 +143,13 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    // 3. Update batch status
+    // 3. Update batch status (and persist the per-batch Drive folder so the
+    // UI / approve flow can find it later)
     const batchUpdate: Partial<AdBatch> = {
       status: "ready-for-review",
       generatedCount: creatives.length,
+      ...(batchOutputFolderId ? { outputFolderId: batchOutputFolderId } : {}),
+      ...(batchOutputFolderUrl ? { outputFolderUrl: batchOutputFolderUrl } : {}),
     };
     const { data: existing } = await supabase
       .from("ad_batches")
@@ -175,7 +207,8 @@ async function processCreative(
   index: number,
   batchId: string,
   publicOrigin: string | null,
-  bottles: DriveImage[]
+  bottles: DriveImage[],
+  uploadFolderId: string | null
 ): Promise<AdCreative> {
   const flags = BANNED_WORDS.filter((w) =>
     `${concept.headline} ${concept.hook}`.toLowerCase().includes(w.toLowerCase())
@@ -222,9 +255,9 @@ async function processCreative(
               headline: concept.headline,
             });
 
-        if (OUTPUT_FOLDER_ID) {
+        if (uploadFolderId) {
           const uploaded = await uploadImage(
-            OUTPUT_FOLDER_ID,
+            uploadFolderId,
             creative.filename,
             finalBuffer
           );
@@ -422,6 +455,18 @@ function buildEditPrompt(visualPrompt: string, headline?: string): string {
     "Scene:",
     visualPrompt,
   ].join("\n");
+}
+
+/**
+ * Build a date-stamped folder name for a batch's output subfolder.
+ * Format: "YYYY-MM-DD_HH-MM <productLabel>" — sortable and human-readable
+ * when scanning the Output folder in Drive.
+ */
+function formatBatchFolderName(productLabel: string): string {
+  const iso = new Date().toISOString(); // 2026-05-28T14:30:12.345Z
+  const date = iso.slice(0, 10); // 2026-05-28
+  const time = iso.slice(11, 16).replace(":", "-"); // 14-30
+  return `${date}_${time} ${productLabel}`;
 }
 
 /**

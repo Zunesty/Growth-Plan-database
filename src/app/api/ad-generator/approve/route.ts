@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { moveFile } from "@/lib/google-drive";
-import type { AdCreative } from "@/lib/ad-generator-types";
+import type { AdBatch, AdCreative } from "@/lib/ad-generator-types";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,8 +12,9 @@ const OUTPUT_FOLDER_ID = process.env.DRIVE_OUTPUT_FOLDER_ID;
 const APPROVED_FOLDER_ID = process.env.DRIVE_APPROVED_FOLDER_ID;
 
 /**
- * Approve a creative. Moves the Drive file from the Output folder
- * (review queue) to the Approved folder (ready for Jimmy to upload to Meta).
+ * Approve a creative. Moves the Drive file from the per-batch output
+ * subfolder (or the root output folder for legacy batches) into the
+ * Approved folder so Jimmy can grab them to upload to Meta.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -35,10 +36,24 @@ export async function POST(req: NextRequest) {
 
     const creative = data.data as AdCreative;
 
-    // Move the file in Drive (if both folders are configured + we have a file ID)
-    if (creative.driveFileId && OUTPUT_FOLDER_ID && APPROVED_FOLDER_ID) {
+    // Resolve which folder the file currently lives in. Newer batches put
+    // each run in its own dated subfolder under DRIVE_OUTPUT_FOLDER_ID;
+    // legacy batches dumped everything in the root.
+    let fromFolderId: string | null = OUTPUT_FOLDER_ID || null;
+    if (creative.batchId) {
+      const { data: batchRow } = await supabase
+        .from("ad_batches")
+        .select("data")
+        .eq("id", creative.batchId)
+        .single();
+      const batch = batchRow?.data as AdBatch | undefined;
+      if (batch?.outputFolderId) fromFolderId = batch.outputFolderId;
+    }
+
+    // Move the file in Drive (if everything's configured + we have a file ID)
+    if (creative.driveFileId && fromFolderId && APPROVED_FOLDER_ID) {
       try {
-        await moveFile(creative.driveFileId, OUTPUT_FOLDER_ID, APPROVED_FOLDER_ID);
+        await moveFile(creative.driveFileId, fromFolderId, APPROVED_FOLDER_ID);
       } catch (driveErr) {
         console.error("Drive move failed:", driveErr);
         // Continue anyway — the Supabase status update is what matters most

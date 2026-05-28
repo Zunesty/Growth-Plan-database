@@ -126,6 +126,10 @@ export type BatchStatus = "queued" | "running" | "ready-for-review" | "approved"
 export type AdBatch = {
   id: string;
   product: AdProductSelection;
+  /** Drive folder ID for the per-batch output subfolder (e.g. "2026-05-28_14-30 NeuroFuel"). Set when the batch is started, if Drive is configured. */
+  outputFolderId?: string;
+  /** Drive web view URL for the per-batch output subfolder. */
+  outputFolderUrl?: string;
   status: BatchStatus;
   targetCount: number;
   generatedCount: number;

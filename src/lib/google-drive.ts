@@ -176,6 +176,30 @@ export async function uploadImage(
   }
 }
 
+/** Create a new subfolder inside a parent folder. */
+export async function createFolder(
+  parentFolderId: string,
+  name: string
+): Promise<{ id: string; webViewLink: string }> {
+  const d = getDriveClient();
+  try {
+    const res = await d.files.create({
+      requestBody: {
+        name,
+        parents: [parentFolderId],
+        mimeType: "application/vnd.google-apps.folder",
+      },
+      fields: "id, webViewLink",
+    });
+    return {
+      id: res.data.id!,
+      webViewLink: res.data.webViewLink!,
+    };
+  } catch (err) {
+    throw wrapDriveError(err, `createFolder(${name})`);
+  }
+}
+
 /** Move a file from one Drive folder to another (used for the approve action). */
 export async function moveFile(
   fileId: string,
