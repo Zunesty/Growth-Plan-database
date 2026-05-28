@@ -1,15 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import DriveFoldersBar from "@/components/DriveFoldersBar";
 import { useBatches, createBatch } from "@/lib/ad-generator-store";
 import {
   PRODUCTS,
   type AdBatch,
+  type AdProductSelection,
   type WinningAd,
   WINNER_CRITERIA,
 } from "@/lib/ad-generator-types";
+
+type BottlePreview = {
+  id: string;
+  name: string;
+  product?: string;
+};
 
 export default function AdGeneratorPage() {
   const { batches, hydrated, refresh } = useBatches();
@@ -17,6 +24,31 @@ export default function AdGeneratorPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [count, setCount] = useState(20);
   const [notes, setNotes] = useState("");
+  const [selectedProduct, setSelectedProduct] =
+    useState<AdProductSelection>("dopamine-brain-food");
+  const [bottlePreview, setBottlePreview] = useState<BottlePreview[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Fetch bottle preview whenever the modal opens or product changes
+  useEffect(() => {
+    if (!showNewBatch) return;
+    let cancelled = false;
+    setPreviewLoading(true);
+    fetch(`/api/ad-generator/bottles?product=${selectedProduct}`)
+      .then((r) => r.json())
+      .then((data: { images?: BottlePreview[] }) => {
+        if (!cancelled) setBottlePreview(data.images || []);
+      })
+      .catch(() => {
+        if (!cancelled) setBottlePreview([]);
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showNewBatch, selectedProduct]);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -25,7 +57,7 @@ export default function AdGeneratorPage() {
       const winnersRes = await fetch("/api/ad-generator/winners", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product: "dopamine-brain-food" }),
+        body: JSON.stringify({ product: selectedProduct }),
       });
       const { winners, source } = (await winnersRes.json()) as {
         winners: WinningAd[];
@@ -35,7 +67,7 @@ export default function AdGeneratorPage() {
       // 2. Create batch record
       const batch: AdBatch = {
         id: `batch-${Date.now()}`,
-        product: "dopamine-brain-food",
+        product: selectedProduct,
         status: "running",
         targetCount: count,
         generatedCount: 0,
@@ -172,9 +204,15 @@ export default function AdGeneratorPage() {
                   Product
                 </label>
                 <select
-                  defaultValue="dopamine-brain-food"
+                  value={selectedProduct}
+                  onChange={(e) =>
+                    setSelectedProduct(e.target.value as AdProductSelection)
+                  }
                   className="w-full rounded-lg border border-zunesty-green-dark/40 bg-zunesty-green-darkest/60 px-4 py-3 text-sm text-zunesty-light focus:border-zunesty-green focus:outline-none transition-colors"
                 >
+                  <option value="all" className="bg-zunesty-black">
+                    All Products (mixed)
+                  </option>
                   {PRODUCTS.map((p) => (
                     <option
                       key={p.id}
@@ -186,6 +224,44 @@ export default function AdGeneratorPage() {
                     </option>
                   ))}
                 </select>
+
+                {/* Bottle reference preview */}
+                <div className="mt-3">
+                  <p className="text-[10px] uppercase tracking-wider text-zunesty-light/40 mb-1.5">
+                    Reference images{" "}
+                    {previewLoading
+                      ? "(loading…)"
+                      : `(${bottlePreview.length})`}
+                  </p>
+                  {bottlePreview.length === 0 && !previewLoading && (
+                    <p className="text-xs text-zunesty-light/30 italic">
+                      No images found in this product&apos;s Drive subfolder.
+                    </p>
+                  )}
+                  {bottlePreview.length > 0 && (
+                    <div className="grid grid-cols-6 gap-1.5">
+                      {bottlePreview.slice(0, 12).map((img) => (
+                        <div
+                          key={img.id}
+                          className="aspect-square rounded border border-zunesty-green-dark/30 bg-zunesty-green-darkest/40 overflow-hidden"
+                          title={img.name}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`/api/ad-generator/bottle-proxy/${img.id}`}
+                            alt={img.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ))}
+                      {bottlePreview.length > 12 && (
+                        <div className="aspect-square rounded border border-zunesty-green-dark/30 bg-zunesty-green-darkest/40 flex items-center justify-center text-[10px] text-zunesty-light/50">
+                          +{bottlePreview.length - 12}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>

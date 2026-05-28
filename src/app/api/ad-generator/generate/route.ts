@@ -12,10 +12,10 @@ import {
   type WinningAd,
 } from "@/lib/ad-generator-types";
 import {
-  pickRandomImage,
   downloadImage,
   uploadImage,
   findSubfolder,
+  listImagesInFolder,
   type DriveImage,
 } from "@/lib/google-drive";
 import { overlayHeadline } from "@/lib/text-overlay";
@@ -63,33 +63,15 @@ export async function POST(req: NextRequest) {
     // reference image from here, so it must be reachable from the internet.
     const publicOrigin = resolvePublicOrigin(req);
 
-    // Resolve the per-product bottle subfolder once for the whole batch.
-    // Each product has a `bottleFolderName` matching a subfolder inside the
-    // root DRIVE_BOTTLES_FOLDER_ID (e.g. "DopamineBrainFood"). If found,
-    // we use it; otherwise we fall back to the root folder so legacy setups
-    // with images at the top level still work.
-    const productConfig = PRODUCTS.find((p) => p.id === product);
-    let bottlesFolderId = BOTTLES_FOLDER_ID || null;
-    if (
-      productConfig?.bottleFolderName &&
-      BOTTLES_FOLDER_ID &&
-      process.env.GOOGLE_REFRESH_TOKEN
-    ) {
-      try {
-        const sub = await findSubfolder(
-          BOTTLES_FOLDER_ID,
-          productConfig.bottleFolderName
-        );
-        if (sub) {
-          bottlesFolderId = sub;
-        } else {
-          console.warn(
-            `No "${productConfig.bottleFolderName}" subfolder under bottles folder — falling back to root`
-          );
-        }
-      } catch (err) {
-        console.warn("findSubfolder failed, using root bottles folder:", err);
-      }
+    // Resolve the bottle reference pool once for the whole batch. With
+    // product="all", flatten images from every active product's subfolder
+    // into one pool so creatives sample across products. With a specific
+    // product, list only that product's subfolder.
+    const bottles = await collectBottles(product);
+    if (bottles.length === 0) {
+      console.warn(
+        `No bottle images found for product=${product}. Pipeline will run without reference images.`
+      );
     }
 
     // 1. Use Claude to ideate ad concepts grounded in the winners
@@ -100,7 +82,7 @@ export async function POST(req: NextRequest) {
     //    of more than 1-2. Promise.allSettled isolates per-creative failures.
     const settled = await Promise.allSettled(
       concepts.map((concept, i) =>
-        processCreative(concept, i, batchId, publicOrigin, bottlesFolderId)
+        processCreative(concept, i, batchId, publicOrigin, bottles)
       )
     );
 
@@ -185,7 +167,7 @@ async function processCreative(
   index: number,
   batchId: string,
   publicOrigin: string | null,
-  bottlesFolderId: string | null
+  bottles: DriveImage[]
 ): Promise<AdCreative> {
   const flags = BANNED_WORDS.filter((w) =>
     `${concept.headline} ${concept.hook}`.toLowerCase().includes(w.toLowerCase())
@@ -216,7 +198,7 @@ async function processCreative(
         concept.visualPrompt,
         useUgc,
         publicOrigin,
-        bottlesFolderId,
+        bottles,
         renderTextInKie ? concept.headline : undefined
       );
 
@@ -363,18 +345,15 @@ async function getSourceImage(
   visualPrompt: string,
   useUgc: boolean,
   publicOrigin: string | null,
-  bottlesFolderId: string | null,
+  bottles: DriveImage[],
   embedHeadline?: string
 ): Promise<Buffer | null> {
-  let bottle: DriveImage | null = null;
-
-  if (bottlesFolderId && process.env.GOOGLE_REFRESH_TOKEN) {
-    try {
-      bottle = await pickRandomImage(bottlesFolderId);
-    } catch (err) {
-      console.warn("Drive bottle fetch failed:", err);
-    }
-  }
+  // Pick a random bottle from the pre-resolved pool (in-memory, no extra
+  // Drive API call per creative).
+  const bottle: DriveImage | null =
+    bottles.length > 0
+      ? bottles[Math.floor(Math.random() * bottles.length)]
+      : null;
 
   // UGC branch — image-to-image with the real bottle as reference
   if (useUgc && process.env.KIE_AI_API_KEY && bottle && publicOrigin) {
@@ -431,6 +410,42 @@ function buildEditPrompt(visualPrompt: string, headline?: string): string {
     "Scene:",
     visualPrompt,
   ].join("\n");
+}
+
+/**
+ * Resolve the bottle reference pool for a batch.
+ * - product === "all" → flatten images from every active product's subfolder
+ *   inside DRIVE_BOTTLES_FOLDER_ID
+ * - specific product → list only that product's subfolder
+ * Listing happens once per batch and is shared across all creatives.
+ */
+async function collectBottles(product: string): Promise<DriveImage[]> {
+  if (!BOTTLES_FOLDER_ID || !process.env.GOOGLE_REFRESH_TOKEN) return [];
+
+  const targets =
+    product === "all"
+      ? PRODUCTS.filter((p) => p.active)
+      : PRODUCTS.filter((p) => p.id === product);
+  if (targets.length === 0) return [];
+
+  const pools = await Promise.all(
+    targets.map(async (p) => {
+      try {
+        const subId = await findSubfolder(BOTTLES_FOLDER_ID!, p.bottleFolderName);
+        if (!subId) {
+          console.warn(
+            `No "${p.bottleFolderName}" subfolder under bottles folder for product ${p.id}`
+          );
+          return [];
+        }
+        return await listImagesInFolder(subId);
+      } catch (err) {
+        console.warn(`collectBottles failed for ${p.id}:`, err);
+        return [];
+      }
+    })
+  );
+  return pools.flat();
 }
 
 /**

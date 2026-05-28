@@ -3,6 +3,12 @@
 
 export type AdProduct = "dopamine-brain-food" | "neurofuel" | "magtech";
 
+/**
+ * What the user picked in the new-batch modal. "all" means: pull bottle
+ * references from every active product's subfolder mixed together.
+ */
+export type AdProductSelection = AdProduct | "all";
+
 export const PRODUCTS: {
   id: AdProduct;
   name: string;
@@ -119,7 +125,7 @@ export type BatchStatus = "queued" | "running" | "ready-for-review" | "approved"
 
 export type AdBatch = {
   id: string;
-  product: AdProduct;
+  product: AdProductSelection;
   status: BatchStatus;
   targetCount: number;
   generatedCount: number;
