@@ -26,8 +26,12 @@ import { overlayHeadline } from "@/lib/text-overlay";
 import { generateImage as kieGenerateImage } from "@/lib/kie-ai";
 
 // Allow the function to run long enough to finish a batch of ~20 KIE AI calls.
-// Pro plan w/ fluid compute caps at 300s. Hobby caps at 60s — adjust if needed.
-export const maxDuration = 300;
+// Nano Banana 2 at 2K averages ~60-120s per generation, sometimes longer
+// under load. With KIE_CONCURRENCY=4, a 20-ad batch needs ~5 rounds × up to
+// 180s ≈ 900s worst-case — so we set the function ceiling to 500s (Pro plan
+// w/ fluid compute supports up to ~800s) and accept that a few slow ones
+// will fall through to the bottle fallback rather than blocking the rest.
+export const maxDuration = 500;
 
 const anthropic = new Anthropic();
 
@@ -49,10 +53,11 @@ const UGC_MIX_RATIO = 1.0;
 
 // Of the KIE AI creatives, share that should have the headline RENDERED by
 // KIE AI inside the image (text baked into the scene) vs. our sharp overlay
-// (always-correct placement). Lowered from 0.5 → 0.25 because Nano Banana
-// sometimes lands text on a face or the bottle even with explicit prompt
-// rules; the sharp overlay is reliable, so we lean on it more.
-const KIE_TEXT_RATIO = 0.25;
+// (always-correct placement). 50/50 — Nano Banana 2 is materially better at
+// text-on-product-labels than the old Nano Banana Edit, so it's worth taking
+// half the share to see variety; the sharp overlay catches the other half
+// with guaranteed placement.
+const KIE_TEXT_RATIO = 0.5;
 
 // Max concurrent KIE AI requests in flight per batch. Firing all 20 at once
 // overwhelmed KIE AI's queue and pushed a chunk of the batch into the
