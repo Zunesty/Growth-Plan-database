@@ -8,6 +8,7 @@ import {
   PRODUCTS,
   type AdBatch,
   type AdProductSelection,
+  type AdTextMode,
   type WinningAd,
 } from "@/lib/ad-generator-types";
 
@@ -25,6 +26,7 @@ export default function AdGeneratorPage() {
   const [notes, setNotes] = useState("");
   const [selectedProduct, setSelectedProduct] =
     useState<AdProductSelection>("dopamine-brain-food");
+  const [textMode, setTextMode] = useState<AdTextMode>("text");
   const [bottlePreview, setBottlePreview] = useState<BottlePreview[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
 
@@ -73,6 +75,7 @@ export default function AdGeneratorPage() {
         approvedCount: 0,
         rejectedCount: 0,
         winners,
+        textMode,
         createdBy: "Santiago",
         createdAt: new Date().toISOString(),
         notes: notes || undefined,
@@ -86,6 +89,7 @@ export default function AdGeneratorPage() {
         body: JSON.stringify({
           batchId: batch.id,
           product: batch.product,
+          textMode,
           count,
           winners,
           createdBy: batch.createdBy,
@@ -278,6 +282,47 @@ export default function AdGeneratorPage() {
                 <p className="text-xs text-zunesty-light/30 mt-1">
                   Austin&apos;s target: 20 per week
                 </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zunesty-light/70 mb-1.5">
+                  Headline on image?
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      { value: "text", label: "Text", sub: "With headline overlay" },
+                      { value: "no-text", label: "No Text", sub: "Image only, clean" },
+                    ] as const
+                  ).map((opt) => {
+                    const selected = textMode === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setTextMode(opt.value as AdTextMode)}
+                        className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                          selected
+                            ? "border-zunesty-green bg-zunesty-green/10"
+                            : "border-zunesty-green-dark/40 bg-zunesty-green-darkest/40 hover:border-zunesty-green-dark"
+                        }`}
+                      >
+                        <p
+                          className={`text-sm font-semibold ${
+                            selected
+                              ? "text-zunesty-green"
+                              : "text-zunesty-light"
+                          }`}
+                        >
+                          {opt.label}
+                        </p>
+                        <p className="text-[10px] text-zunesty-light/50 mt-0.5">
+                          {opt.sub}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div>

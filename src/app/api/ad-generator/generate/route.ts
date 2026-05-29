@@ -9,6 +9,7 @@ import {
   type AdAngle,
   type AdBatch,
   type AdCreative,
+  type AdTextMode,
   type ProductConfig,
   type WinningAd,
 } from "@/lib/ad-generator-types";
@@ -53,12 +54,20 @@ const KIE_TEXT_RATIO = 0.5;
 
 export async function POST(req: NextRequest) {
   try {
-    const { batchId, product, count, winners, createdBy } = (await req.json()) as {
+    const {
+      batchId,
+      product,
+      count,
+      winners,
+      createdBy,
+      textMode = "text",
+    } = (await req.json()) as {
       batchId: string;
       product: string;
       count: number;
       winners: WinningAd[];
       createdBy: string;
+      textMode?: AdTextMode;
     };
 
     // Public origin for the bottle proxy URL — KIE AI fetches the
@@ -117,7 +126,8 @@ export async function POST(req: NextRequest) {
           batchId,
           publicOrigin,
           bottles,
-          uploadFolderId
+          uploadFolderId,
+          textMode
         )
       )
     );
@@ -207,7 +217,8 @@ async function processCreative(
   batchId: string,
   publicOrigin: string | null,
   bottles: DriveImage[],
-  uploadFolderId: string | null
+  uploadFolderId: string | null,
+  textMode: AdTextMode
 ): Promise<AdCreative> {
   const flags = BANNED_WORDS.filter((w) =>
     `${concept.headline} ${concept.hook}`.toLowerCase().includes(w.toLowerCase())
@@ -230,9 +241,12 @@ async function processCreative(
   if (flags.length === 0) {
     try {
       const useUgc = Math.random() < UGC_MIX_RATIO;
+      const wantsHeadline = textMode === "text";
       // Only ask KIE AI to draw the headline when we're going through KIE AI
-      // anyway — the bottle-only fallback always uses sharp's overlay.
-      const renderTextInKie = useUgc && Math.random() < KIE_TEXT_RATIO;
+      // anyway AND the user wants text — the bottle-only fallback uses sharp,
+      // and "no-text" mode skips text rendering entirely on both branches.
+      const renderTextInKie =
+        wantsHeadline && useUgc && Math.random() < KIE_TEXT_RATIO;
 
       const sourceImage = await getSourceImage(
         concept.visualPrompt,
@@ -243,16 +257,19 @@ async function processCreative(
       );
 
       if (sourceImage) {
-        // If KIE AI baked the headline into the image, just normalize to the
-        // 9:16 canvas. Otherwise composite our sharp overlay on top.
-        const finalBuffer = renderTextInKie
-          ? await sharp(sourceImage)
-              .resize(1080, 1920, { fit: "cover", position: "center" })
-              .png()
-              .toBuffer()
-          : await overlayHeadline(sourceImage, {
-              headline: concept.headline,
-            });
+        // Three branches:
+        // 1. "no-text" mode → just resize, no overlay
+        // 2. KIE AI already baked text into the image → resize only
+        // 3. Default → sharp overlay on top
+        const finalBuffer =
+          !wantsHeadline || renderTextInKie
+            ? await sharp(sourceImage)
+                .resize(1080, 1920, { fit: "cover", position: "center" })
+                .png()
+                .toBuffer()
+            : await overlayHeadline(sourceImage, {
+                headline: concept.headline,
+              });
 
         if (uploadFolderId) {
           const uploaded = await uploadImage(
@@ -341,7 +358,7 @@ Of the ${count} concepts, exactly ${Math.ceil(count / 2)} MUST set includesPerso
 
 SCENE COMPOSITION FOR INSTAGRAM — IMPORTANT:
 - This is a 9:16 vertical image (Instagram Story / Reels). Compose for vertical viewing.
-- Leave the TOP THIRD of the frame as relatively empty / clean background space. The headline text will be overlaid there, and it must NOT cross any person's face, hands, or the product bottle. Put the subject and bottle in the middle / lower half.
+- Leave the TOP THIRD of the frame as relatively empty / clean background space. The headline text will be overlaid there, and it must NOT cross any person's face, hands, OR the product bottle. The bottle MUST be positioned in the lower half of the frame, not the upper half — there should be clear empty space above the bottle where text can sit without ever touching it.
 - Keep the very top ~15% and very bottom ~20% of the frame as clean margin where Instagram's UI overlays (username, swipe-up, send button) sit.
 
 PREFERRED ENVIRONMENTS (pick what fits the product):
@@ -469,8 +486,8 @@ function buildEditPrompt(visualPrompt: string, headline?: string): string {
       "Use one or two lines, sans-serif, high contrast against the background. No other text anywhere in the image.",
       "Spell the headline EXACTLY as written — do not paraphrase or change any words.",
       "CRITICAL placement rules — these are non-negotiable:",
-      "- Position the text in EMPTY background space. NEVER place text overlapping any person's face, hands, or the product bottle.",
-      "- Place the text in the top portion of the image, ABOVE any person or subject. If the person is positioned high in the frame, move the text into the empty sky / wall / ceiling area above them.",
+      "- Position the text in EMPTY background space. NEVER place text overlapping any person's face, hands, or the product bottle. The bottle must remain fully visible and unobscured by text at all times.",
+      "- Place the text in the top portion of the image, ABOVE any person, subject, or bottle. If the person or bottle is positioned high in the frame, move the text further up into empty sky / wall / ceiling area, or do NOT render text on this image.",
       "- This image is for Instagram (Story / Reels). Keep the text within the central 70% vertical band: avoid the very top ~15% and very bottom ~20% of the frame where Instagram overlays the username and action buttons."
     );
   }

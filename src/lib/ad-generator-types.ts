@@ -65,6 +65,8 @@ export const PRODUCTS: ProductConfig[] = [
     id: "neurofuel",
     name: "NeuroFuel",
     bottleFolderName: "NeuroFuel",
+    // Paused until Dopamine Brain Food is dialed in (Austin, May 2026).
+    // Flip back to active once we're happy with DBF output quality.
     tagline: "Build a better brain — focus and memory",
     activeIngredients:
       "Acetyl-L-Carnitine HCL, Artichoke Leaf Extract, Coleus forskohlii, L-Phenylalanine, Vitamin B6 (P5P)",
@@ -83,12 +85,13 @@ export const PRODUCTS: ProductConfig[] = [
       "remembering what matters",
       "long focused sessions at the desk",
     ],
-    active: true,
+    active: false,
   },
   {
     id: "magtech",
     name: "MagTech",
     bottleFolderName: "MagTech",
+    // Paused until Dopamine Brain Food is dialed in (Austin, May 2026).
     tagline: "Better sleep in a bottle",
     activeIngredients:
       "Magnesium Glycinate, Magnesium-L-Threonate (Magtein™), Magnesium Taurate",
@@ -107,7 +110,7 @@ export const PRODUCTS: ProductConfig[] = [
       "feeling rested in the morning",
       "post-workout recovery",
     ],
-    active: true,
+    active: false,
   },
 ];
 
@@ -258,9 +261,19 @@ export type AdCreative = {
 
 export type BatchStatus = "queued" | "running" | "ready-for-review" | "approved" | "rejected";
 
+/**
+ * Whether the generated creatives should carry an overlaid headline or come
+ * out as clean image-only assets. "text" (default) routes through the
+ * existing 50/50 KIE-rendered / sharp-overlaid pipeline. "no-text" skips
+ * both, returning the bottle-in-scene image as-is at 9:16.
+ */
+export type AdTextMode = "text" | "no-text";
+
 export type AdBatch = {
   id: string;
   product: AdProductSelection;
+  /** Whether this batch's creatives should have a headline overlay. */
+  textMode?: AdTextMode;
   /** Drive folder ID for the per-batch output subfolder (e.g. "2026-05-28_14-30 NeuroFuel"). Set when the batch is started, if Drive is configured. */
   outputFolderId?: string;
   /** Drive web view URL for the per-batch output subfolder. */
