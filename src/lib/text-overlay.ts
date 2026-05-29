@@ -48,8 +48,12 @@ export async function overlayHeadline(
     minFontSize = 56,
   } = options;
 
-  // 1. Resize the source image to fill the 9:16 canvas
+  // 1. Resize the source image to fill the 9:16 canvas. flatten() composites
+  // any alpha channel onto a solid neutral dark background so transparent
+  // bottle PNGs (the typical bottle-only fallback source) don't show through
+  // as black bars / blocks against the dark UI.
   const baseImage = await sharp(imageBuffer)
+    .flatten({ background: { r: 24, g: 24, b: 26 } })
     .resize(width, height, { fit: "cover", position: "center" })
     .toBuffer();
 

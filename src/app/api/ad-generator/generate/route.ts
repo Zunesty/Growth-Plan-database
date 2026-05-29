@@ -49,9 +49,17 @@ const UGC_MIX_RATIO = 1.0;
 
 // Of the KIE AI creatives, share that should have the headline RENDERED by
 // KIE AI inside the image (text baked into the scene) vs. our sharp overlay
-// (guaranteed perfect text). 50/50 gives variety + a typography safety net
-// since Nano Banana can misspell longer headlines.
-const KIE_TEXT_RATIO = 0.5;
+// (always-correct placement). Lowered from 0.5 → 0.25 because Nano Banana
+// sometimes lands text on a face or the bottle even with explicit prompt
+// rules; the sharp overlay is reliable, so we lean on it more.
+const KIE_TEXT_RATIO = 0.25;
+
+// Max concurrent KIE AI requests in flight per batch. Firing all 20 at once
+// overwhelmed KIE AI's queue and pushed a chunk of the batch into the
+// bottle-only fallback. 4 in flight keeps things flowing without starving
+// KIE AI. Each request is ~30s, so 20 ads finish in ~150s total (well
+// inside the 300s function maxDuration).
+const KIE_CONCURRENCY = 4;
 
 export async function POST(req: NextRequest) {
   try {
@@ -119,8 +127,14 @@ export async function POST(req: NextRequest) {
     //    them sequentially blows past Vercel's function timeout for any batch
     //    of more than 1-2. Promise.allSettled isolates per-creative failures.
     const uploadFolderId = batchOutputFolderId || OUTPUT_FOLDER_ID || null;
-    const settled = await Promise.allSettled(
-      concepts.map((concept, i) =>
+    // Cap parallelism to KIE_CONCURRENCY. Firing all 20 KIE AI requests at
+    // once was overwhelming KIE AI's queue and pushing a chunk of the batch
+    // into the bottle-only fallback. 4 in flight keeps things flowing without
+    // ever queueing more than KIE AI can handle.
+    const settled = await mapWithConcurrency(
+      concepts,
+      KIE_CONCURRENCY,
+      (concept, i) =>
         processCreative(
           concept,
           i,
@@ -130,7 +144,6 @@ export async function POST(req: NextRequest) {
           uploadFolderId,
           textMode
         )
-      )
     );
 
     const creatives: AdCreative[] = settled.map((r, i) => {
@@ -266,6 +279,11 @@ async function processCreative(
         const finalBuffer =
           !wantsHeadline || renderTextInKie
             ? await sharp(sourceImage)
+                // Flatten alpha onto a solid neutral dark — KIE AI output
+                // is fully opaque so this is a no-op there, but bottle-only
+                // fallbacks with transparent PNGs would otherwise show as
+                // "black bars" against the dark UI.
+                .flatten({ background: { r: 24, g: 24, b: 26 } })
                 .resize(1080, 1920, { fit: "cover", position: "center" })
                 .png()
                 .toBuffer()
@@ -527,6 +545,42 @@ function buildEditPrompt(visualPrompt: string, headline?: string): string {
     "Scene:",
     visualPrompt,
   ].join("\n");
+}
+
+/**
+ * Run `fn` over each item in `items` with at most `concurrency` workers
+ * running in parallel. Returns a PromiseSettledResult[] in input order, so
+ * the caller can treat it identically to Promise.allSettled. Use this instead
+ * of Promise.allSettled(items.map(...)) when the work fan-out would otherwise
+ * exceed an external service's safe parallelism (here: KIE AI).
+ */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (true) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      try {
+        const value = await fn(items[i], i);
+        results[i] = { status: "fulfilled", value };
+      } catch (reason) {
+        results[i] = { status: "rejected", reason };
+      }
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    () => worker()
+  );
+  await Promise.all(workers);
+  return results;
 }
 
 /**

@@ -414,9 +414,13 @@ function GenerationModeBadge({ mode }: { mode: GenerationMode }) {
       title: "KIE AI generated a scene + sharp added the headline overlay.",
     },
     "kie-ai-text": {
-      label: "AI scene + text",
-      classes: "text-zunesty-green/80 bg-zunesty-green/10 border-zunesty-green/30",
-      title: "KIE AI generated the scene and rendered the headline directly.",
+      label: "AI scene + AI text",
+      // Sky-blue so this stands out from the standard AI-scene-with-sharp-overlay
+      // case. KIE AI rendering the text is the path where placement can drift
+      // onto a face or the bottle — worth being able to spot at a glance.
+      classes: "text-sky-300 bg-sky-500/10 border-sky-500/30",
+      title:
+        "KIE AI rendered both the scene AND the headline text. This is the riskier path — Nano Banana sometimes ignores text-placement rules and lands the headline on a face or the bottle. Reject and re-roll if so.",
     },
     "bottle-only": {
       label: "Bottle only — KIE fallback",
