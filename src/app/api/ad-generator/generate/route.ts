@@ -52,12 +52,11 @@ const OUTPUT_FOLDER_ID = process.env.DRIVE_OUTPUT_FOLDER_ID;
 const UGC_MIX_RATIO = 1.0;
 
 // Of the KIE AI creatives, share that should have the headline RENDERED by
-// KIE AI inside the image (text baked into the scene) vs. our sharp overlay
-// (always-correct placement). 50/50 — Nano Banana 2 is materially better at
-// text-on-product-labels than the old Nano Banana Edit, so it's worth taking
-// half the share to see variety; the sharp overlay catches the other half
-// with guaranteed placement.
-const KIE_TEXT_RATIO = 0.5;
+// KIE AI inside the image (text baked into the scene) vs. our sharp overlay.
+// 1.0 means every successful KIE AI creative gets its headline drawn by
+// Nano Banana 2 directly. The sharp overlay is still used on bottle-only
+// fallbacks (when KIE AI fails) so those still get a headline somehow.
+const KIE_TEXT_RATIO = 1.0;
 
 // Max concurrent KIE AI requests in flight per batch. Firing all 20 at once
 // overwhelmed KIE AI's queue and pushed a chunk of the batch into the
@@ -371,7 +370,7 @@ Winner ${i + 1}:
   )
   .join("\n")}
 
-TASK: Generate ${count} new ad concepts. Each must include:
+TASK: Generate EXACTLY ${count} new ad concepts — no more, no less. The output JSON array MUST contain exactly ${count} elements. Each must include:
 - angle: pick ONE from this list — ${ANGLES.map((a) => a.id).join(", ")}
 - includesPerson: true or false (see split rule below)
 - headline: ONE punchy sentence, 5-9 words, max 50 characters. NOT a fragment, NOT a tagline pair. It will be rendered in very large white text on top of the image, so it must read as a single beat. The headline must connect to this product specifically — use the allowed benefit language, not generic claims that fit another product.
@@ -432,13 +431,22 @@ Return ONLY the JSON array, no other text.`;
   const jsonMatch = text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) throw new Error("Claude didn't return a JSON array");
 
-  return JSON.parse(jsonMatch[0]) as Array<{
+  const parsed = JSON.parse(jsonMatch[0]) as Array<{
     angle: AdAngle;
     includesPerson?: boolean;
     headline: string;
     hook: string;
     visualPrompt: string;
   }>;
+
+  // Hard cap. Claude sometimes over-delivers despite the "exactly N" rule
+  // in the prompt; the user asked for `count` and that's all we ship.
+  if (parsed.length !== count) {
+    console.warn(
+      `Claude returned ${parsed.length} concepts but ${count} were requested. Truncating.`
+    );
+  }
+  return parsed.slice(0, count);
 }
 
 /**
