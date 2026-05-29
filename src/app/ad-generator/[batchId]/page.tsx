@@ -4,7 +4,13 @@ import { use, useState } from "react";
 import Link from "next/link";
 import DriveFoldersBar from "@/components/DriveFoldersBar";
 import { useBatchDetail } from "@/lib/ad-generator-store";
-import { ANGLES, type AdCreative, type CreativeStatus } from "@/lib/ad-generator-types";
+import {
+  ANGLES,
+  type AdCreative,
+  type CreativeStatus,
+  type GenerationMode,
+  type WinningAd,
+} from "@/lib/ad-generator-types";
 
 export default function BatchDetailPage({ params }: { params: Promise<{ batchId: string }> }) {
   const { batchId } = use(params);
@@ -12,6 +18,7 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
   const [filter, setFilter] = useState<"all" | CreativeStatus>("all");
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [showingWinners, setShowingWinners] = useState(false);
 
   if (!hydrated) {
     return (
@@ -83,15 +90,27 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
         >
           ← Back to Ad Generator
         </Link>
-        <h2 className="text-2xl font-semibold text-zunesty-light mt-2">
-          Batch {batch.id.split("-").slice(-1)[0]}
-        </h2>
-        <p className="text-sm text-zunesty-light/50">
-          {creatives.length} ads generated · {counts.approved} approved · {counts.rejected} rejected
-        </p>
-        {batch.notes && (
-          <p className="text-sm text-zunesty-light/60 mt-2 italic">&quot;{batch.notes}&quot;</p>
-        )}
+        <div className="flex items-start justify-between gap-4 mt-2 flex-wrap">
+          <div>
+            <h2 className="text-2xl font-semibold text-zunesty-light">
+              Batch {batch.id.split("-").slice(-1)[0]}
+            </h2>
+            <p className="text-sm text-zunesty-light/50">
+              {creatives.length} ads generated · {counts.approved} approved · {counts.rejected} rejected
+            </p>
+            {batch.notes && (
+              <p className="text-sm text-zunesty-light/60 mt-2 italic">&quot;{batch.notes}&quot;</p>
+            )}
+          </div>
+          {batch.winners && batch.winners.length > 0 && (
+            <button
+              onClick={() => setShowingWinners(true)}
+              className="rounded-lg border border-zunesty-green/40 bg-zunesty-green/10 px-4 py-2 text-xs font-semibold text-zunesty-green hover:bg-zunesty-green/20 transition-colors"
+            >
+              🏆 View winning ads ({batch.winners.length})
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Drive folder shortcuts */}
@@ -172,6 +191,83 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
           </div>
         </div>
       )}
+
+      {/* Winners modal — shows the Triple Whale (or mock) ads this batch was
+          seeded from. Useful for understanding why Claude wrote what it wrote. */}
+      {showingWinners && batch.winners && batch.winners.length > 0 && (
+        <div
+          className="fixed inset-0 bg-zunesty-black/70 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowingWinners(false)}
+        >
+          <div
+            className="bg-zunesty-green-darkest border border-zunesty-green/40 rounded-xl p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-zunesty-light">
+                  🏆 Winning ads used as seeds
+                </h3>
+                <p className="text-xs text-zunesty-light/50 mt-1">
+                  Claude wrote new concepts using these as patterns.
+                  {batch.winners[0]?.id?.startsWith("tw_mock_")
+                    ? " (Source: mock seeds — Triple Whale not connected for this batch)"
+                    : " (Source: Triple Whale)"}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowingWinners(false)}
+                className="text-zunesty-light/40 hover:text-zunesty-light text-lg leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {batch.winners.map((w: WinningAd, i: number) => (
+                <div
+                  key={w.id}
+                  className="rounded-lg border border-zunesty-green-dark/30 bg-zunesty-green-darkest/40 p-3"
+                >
+                  <div className="flex items-start gap-3">
+                    {w.imageUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={w.imageUrl}
+                        alt={w.headline}
+                        className="w-16 h-16 rounded object-cover flex-shrink-0 border border-zunesty-green-dark/40"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-mono text-zunesty-light/40">
+                          #{i + 1}
+                        </span>
+                        <span className="text-[10px] uppercase tracking-wider text-zunesty-green/80 font-semibold">
+                          ${w.cpa} CPA · {w.sales} sales
+                        </span>
+                      </div>
+                      <p className="text-sm font-semibold text-zunesty-light leading-snug">
+                        {w.headline}
+                      </p>
+                      {w.hook && (
+                        <p className="text-xs text-zunesty-light/60 italic mt-1">
+                          &ldquo;{w.hook}&rdquo;
+                        </p>
+                      )}
+                      {w.visualStyle && (
+                        <p className="text-[11px] text-zunesty-light/40 mt-1">
+                          Visual: {w.visualStyle}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -232,6 +328,10 @@ function CreativeCard({
             <p className="text-xs text-zunesty-light/30">Image generation pending</p>
           </div>
         </div>
+      )}
+
+      {creative.generationMode && (
+        <GenerationModeBadge mode={creative.generationMode} />
       )}
 
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -300,5 +400,45 @@ function StatusPill({ status }: { status: CreativeStatus }) {
     <span className={`text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${c.classes}`}>
       {c.label}
     </span>
+  );
+}
+
+function GenerationModeBadge({ mode }: { mode: GenerationMode }) {
+  const config: Record<
+    GenerationMode,
+    { label: string; classes: string; title: string }
+  > = {
+    "kie-ai-scene": {
+      label: "AI scene",
+      classes: "text-zunesty-green/80 bg-zunesty-green/10 border-zunesty-green/30",
+      title: "KIE AI generated a scene + sharp added the headline overlay.",
+    },
+    "kie-ai-text": {
+      label: "AI scene + text",
+      classes: "text-zunesty-green/80 bg-zunesty-green/10 border-zunesty-green/30",
+      title: "KIE AI generated the scene and rendered the headline directly.",
+    },
+    "bottle-only": {
+      label: "Bottle only — KIE fallback",
+      classes: "text-amber-400 bg-amber-500/10 border-amber-500/30",
+      title:
+        "KIE AI failed (or text mode was 'no-text'). Used the raw bottle shot resized to 9:16. Check Vercel logs for the KIE AI error.",
+    },
+    none: {
+      label: "No image",
+      classes: "text-red-400 bg-red-500/10 border-red-500/30",
+      title: "No image was produced — compliance reject or Drive not configured.",
+    },
+  };
+  const c = config[mode];
+  return (
+    <div className="mb-1.5">
+      <span
+        title={c.title}
+        className={`text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${c.classes}`}
+      >
+        {c.label}
+      </span>
+    </div>
   );
 }

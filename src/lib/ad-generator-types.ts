@@ -239,6 +239,20 @@ export const ANGLES: { id: AdAngle; label: string }[] = [
 
 export type CreativeStatus = "generating" | "ready" | "approved" | "rejected" | "failed";
 
+/**
+ * Which branch of the image pipeline produced this creative. Useful for
+ * debugging (e.g. spotting when a creative fell through to the raw bottle).
+ *   - kie-ai-scene  → KIE AI image-to-image, sharp overlay added the headline
+ *   - kie-ai-text   → KIE AI image-to-image AND rendered the headline itself
+ *   - bottle-only   → KIE AI failed (or text-mode = no-text); raw bottle resized
+ *   - none          → no image produced (compliance reject / no bottle / Drive off)
+ */
+export type GenerationMode =
+  | "kie-ai-scene"
+  | "kie-ai-text"
+  | "bottle-only"
+  | "none";
+
 export type AdCreative = {
   id: string;
   batchId: string;
@@ -251,6 +265,8 @@ export type AdCreative = {
   driveUrl?: string;
   headline: string;
   status: CreativeStatus;
+  /** Which branch of the image pipeline ran. */
+  generationMode?: GenerationMode;
   rejectionReason?: string;
   reviewedBy?: string;
   reviewedAt?: string;

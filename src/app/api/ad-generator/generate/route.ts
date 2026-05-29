@@ -10,6 +10,7 @@ import {
   type AdBatch,
   type AdCreative,
   type AdTextMode,
+  type GenerationMode,
   type ProductConfig,
   type WinningAd,
 } from "@/lib/ad-generator-types";
@@ -248,13 +249,14 @@ async function processCreative(
       const renderTextInKie =
         wantsHeadline && useUgc && Math.random() < KIE_TEXT_RATIO;
 
-      const sourceImage = await getSourceImage(
+      const { buffer: sourceImage, mode: generationMode } = await getSourceImage(
         concept.visualPrompt,
         useUgc,
         publicOrigin,
         bottles,
         renderTextInKie ? concept.headline : undefined
       );
+      creative.generationMode = generationMode;
 
       if (sourceImage) {
         // Three branches:
@@ -425,13 +427,18 @@ Return ONLY the JSON array, no other text.`;
  * - Otherwise → return the raw bottle shot for the simple text-overlay branch.
  * - Returns null if nothing usable is available.
  */
+type SourceImageResult = {
+  buffer: Buffer | null;
+  mode: GenerationMode;
+};
+
 async function getSourceImage(
   visualPrompt: string,
   useUgc: boolean,
   publicOrigin: string | null,
   bottles: DriveImage[],
   embedHeadline?: string
-): Promise<Buffer | null> {
+): Promise<SourceImageResult> {
   // Pick a random bottle from the pre-resolved pool (in-memory, no extra
   // Drive API call per creative).
   const bottle: DriveImage | null =
@@ -439,31 +446,53 @@ async function getSourceImage(
       ? bottles[Math.floor(Math.random() * bottles.length)]
       : null;
 
-  // UGC branch — image-to-image with the real bottle as reference
+  // UGC branch — image-to-image with the real bottle as reference. We retry
+  // once on transient failures (rate limits, brief network blips) so a
+  // single hiccup doesn't drop the creative all the way to the bottle-only
+  // fallback — which gives the "raw bottle with text" look Santiago noticed.
   if (useUgc && process.env.KIE_AI_API_KEY && bottle && publicOrigin) {
+    const bottleUrl = `${publicOrigin}/api/ad-generator/bottle-proxy/${bottle.id}`;
+    const kieRequest = {
+      prompt: buildEditPrompt(visualPrompt, embedHeadline),
+      referenceImages: [bottleUrl],
+      aspectRatio: "9:16" as const,
+    };
+
+    const tryKie = async () => {
+      const result = await kieGenerateImage(kieRequest);
+      return result.imageBuffer ?? null;
+    };
+    const kieMode: GenerationMode = embedHeadline ? "kie-ai-text" : "kie-ai-scene";
+
     try {
-      const bottleUrl = `${publicOrigin}/api/ad-generator/bottle-proxy/${bottle.id}`;
-      const result = await kieGenerateImage({
-        prompt: buildEditPrompt(visualPrompt, embedHeadline),
-        referenceImages: [bottleUrl],
-        aspectRatio: "9:16",
-      });
-      if (result.imageBuffer) return result.imageBuffer;
-    } catch (err) {
-      console.warn("KIE AI image-to-image failed, falling back to bottle shot:", err);
+      const buf = await tryKie();
+      if (buf) return { buffer: buf, mode: kieMode };
+    } catch (firstErr) {
+      console.warn("KIE AI attempt 1 failed, retrying once after 3s:", firstErr);
+      await new Promise((r) => setTimeout(r, 3000));
+      try {
+        const buf = await tryKie();
+        if (buf) return { buffer: buf, mode: kieMode };
+      } catch (retryErr) {
+        console.warn(
+          "KIE AI retry also failed, falling back to bottle shot:",
+          retryErr
+        );
+      }
     }
   }
 
   // Bottle-shot branch (or any UGC fallback)
   if (bottle) {
     try {
-      return await downloadImage(bottle.id);
+      const buf = await downloadImage(bottle.id);
+      return { buffer: buf, mode: "bottle-only" };
     } catch (err) {
       console.warn("Drive bottle download failed:", err);
     }
   }
 
-  return null;
+  return { buffer: null, mode: "none" };
 }
 
 /**
