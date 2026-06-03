@@ -331,7 +331,10 @@ function CreativeCard({
       )}
 
       {creative.generationMode && (
-        <GenerationModeBadge mode={creative.generationMode} />
+        <GenerationModeBadge
+          mode={creative.generationMode}
+          kieError={creative.kieAiError}
+        />
       )}
 
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -403,7 +406,13 @@ function StatusPill({ status }: { status: CreativeStatus }) {
   );
 }
 
-function GenerationModeBadge({ mode }: { mode: GenerationMode }) {
+function GenerationModeBadge({
+  mode,
+  kieError,
+}: {
+  mode: GenerationMode;
+  kieError?: string;
+}) {
   const config: Record<
     GenerationMode,
     { label: string; classes: string; title: string }
@@ -415,9 +424,6 @@ function GenerationModeBadge({ mode }: { mode: GenerationMode }) {
     },
     "kie-ai-text": {
       label: "AI scene + AI text",
-      // Sky-blue so this stands out from the standard AI-scene-with-sharp-overlay
-      // case. KIE AI rendering the text is the path where placement can drift
-      // onto a face or the bottle — worth being able to spot at a glance.
       classes: "text-sky-300 bg-sky-500/10 border-sky-500/30",
       title:
         "KIE AI rendered both the scene AND the headline text. This is the riskier path — Nano Banana sometimes ignores text-placement rules and lands the headline on a face or the bottle. Reject and re-roll if so.",
@@ -426,7 +432,7 @@ function GenerationModeBadge({ mode }: { mode: GenerationMode }) {
       label: "Bottle only — KIE fallback",
       classes: "text-amber-400 bg-amber-500/10 border-amber-500/30",
       title:
-        "KIE AI failed (or text mode was 'no-text'). Used the raw bottle shot resized to 9:16. Check Vercel logs for the KIE AI error.",
+        "KIE AI failed (or text mode was 'no-text'). Used the raw bottle shot resized to 9:16.",
     },
     none: {
       label: "No image",
@@ -438,11 +444,19 @@ function GenerationModeBadge({ mode }: { mode: GenerationMode }) {
   return (
     <div className="mb-1.5">
       <span
-        title={c.title}
+        title={kieError ? `${c.title}\n\nKIE AI error: ${kieError}` : c.title}
         className={`text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${c.classes}`}
       >
         {c.label}
       </span>
+      {kieError && (mode === "bottle-only" || mode === "none") && (
+        <p
+          className="text-[10px] text-amber-300/80 mt-1 font-mono break-words leading-tight"
+          title={kieError}
+        >
+          {kieError}
+        </p>
+      )}
     </div>
   );
 }

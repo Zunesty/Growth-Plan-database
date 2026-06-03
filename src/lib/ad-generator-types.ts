@@ -267,6 +267,13 @@ export type AdCreative = {
   status: CreativeStatus;
   /** Which branch of the image pipeline ran. */
   generationMode?: GenerationMode;
+  /**
+   * The most recent KIE AI error message for this creative. Set whenever the
+   * KIE AI call failed (whether we eventually fell back to bottle-only or the
+   * whole creative failed). Lets the UI surface the real failure reason next
+   * to the bottle-only badge instead of forcing devs to crack open Vercel logs.
+   */
+  kieAiError?: string;
   rejectionReason?: string;
   reviewedBy?: string;
   reviewedAt?: string;

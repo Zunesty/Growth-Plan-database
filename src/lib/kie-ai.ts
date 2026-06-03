@@ -1,12 +1,13 @@
-// KIE AI client for Nano Banana 2 (Gemini 3.1 Flash 4K Image).
-// Docs: https://docs.kie.ai/market/google/nanobanana2
+// KIE AI client for Nano Banana Pro.
+// Docs: https://docs.kie.ai/market/google/pro-image-to-image
 //
-// We're on Nano Banana 2 (the newest generation) instead of the basic
-// Nano Banana Edit. The two practical wins for our pipeline:
-//   1. Substantially better text-on-product-label rendering. Reduces the
-//      "headline landed on a face / bottle" failure mode that Nano Banana
-//      Edit hit ~20% of the time.
-//   2. 2K output instead of 1K — cleaner ads for Instagram.
+// We sit in the middle: not the basic Nano Banana Edit (older, weaker at
+// text), not Nano Banana 2 (newest but slower and we were timing out on it).
+// Pro is the proven sweet spot for our use case:
+//   - Strong text-on-product-label rendering (the bug we keep hitting on
+//     Edit was "headline landed on a face or bottle")
+//   - Faster than Nano Banana 2, especially at 2K resolution
+//   - Up to 8 reference images, same request shape as Nano Banana 2
 //
 // Uses the unified job system:
 //   POST https://api.kie.ai/api/v1/jobs/createTask    → returns { data: { taskId } }
@@ -15,7 +16,7 @@
 // resultJson is a JSON STRING containing { resultUrls: [url, ...] }.
 
 const KIE_AI_BASE = "https://api.kie.ai/api/v1";
-const MODEL_SLUG = "nano-banana-2";
+const MODEL_SLUG = "nano-banana-pro";
 
 export type KieAiOptions = {
   prompt: string;

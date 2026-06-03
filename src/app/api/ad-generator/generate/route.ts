@@ -266,7 +266,11 @@ async function processCreative(
       const renderTextInKie =
         wantsHeadline && useUgc && Math.random() < KIE_TEXT_RATIO;
 
-      const { buffer: sourceImage, mode: generationMode } = await getSourceImage(
+      const {
+        buffer: sourceImage,
+        mode: generationMode,
+        kieError,
+      } = await getSourceImage(
         concept.visualPrompt,
         useUgc,
         publicOrigin,
@@ -274,6 +278,7 @@ async function processCreative(
         renderTextInKie ? concept.headline : undefined
       );
       creative.generationMode = generationMode;
+      if (kieError) creative.kieAiError = kieError;
 
       if (sourceImage) {
         // Three branches:
@@ -461,6 +466,8 @@ Return ONLY the JSON array, no other text.`;
 type SourceImageResult = {
   buffer: Buffer | null;
   mode: GenerationMode;
+  /** Last KIE AI error message (if KIE AI was attempted and failed). */
+  kieError?: string;
 };
 
 async function getSourceImage(
@@ -495,25 +502,43 @@ async function getSourceImage(
     };
     const kieMode: GenerationMode = embedHeadline ? "kie-ai-text" : "kie-ai-scene";
 
+    let lastKieError: string | undefined;
     try {
       const buf = await tryKie();
       if (buf) return { buffer: buf, mode: kieMode };
     } catch (firstErr) {
+      lastKieError =
+        firstErr instanceof Error ? firstErr.message : String(firstErr);
       console.warn("KIE AI attempt 1 failed, retrying once after 3s:", firstErr);
       await new Promise((r) => setTimeout(r, 3000));
       try {
         const buf = await tryKie();
         if (buf) return { buffer: buf, mode: kieMode };
       } catch (retryErr) {
+        lastKieError =
+          retryErr instanceof Error ? retryErr.message : String(retryErr);
         console.warn(
           "KIE AI retry also failed, falling back to bottle shot:",
           retryErr
         );
       }
     }
+
+    // KIE AI was attempted twice and didn't produce a buffer. Fall through to
+    // the bottle fallback below but carry the error so the UI can show it.
+    if (bottle) {
+      try {
+        const buf = await downloadImage(bottle.id);
+        return { buffer: buf, mode: "bottle-only", kieError: lastKieError };
+      } catch (err) {
+        console.warn("Drive bottle download failed:", err);
+      }
+    }
+
+    return { buffer: null, mode: "none", kieError: lastKieError };
   }
 
-  // Bottle-shot branch (or any UGC fallback)
+  // Plain bottle-shot branch (KIE AI not configured / not requested / no bottle)
   if (bottle) {
     try {
       const buf = await downloadImage(bottle.id);
