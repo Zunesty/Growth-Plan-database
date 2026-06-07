@@ -6,7 +6,9 @@ import DriveFoldersBar from "@/components/DriveFoldersBar";
 import { useBatchDetail } from "@/lib/ad-generator-store";
 import {
   ANGLES,
+  type AdConcept,
   type AdCreative,
+  type ConceptStatus,
   type CreativeStatus,
   type GenerationMode,
   type WinningAd,
@@ -14,11 +16,14 @@ import {
 
 export default function BatchDetailPage({ params }: { params: Promise<{ batchId: string }> }) {
   const { batchId } = use(params);
-  const { batch, creatives, hydrated, updateCreativeStatus } = useBatchDetail(batchId);
+  const { batch, creatives, hydrated, updateCreativeStatus, refresh } =
+    useBatchDetail(batchId);
   const [filter, setFilter] = useState<"all" | CreativeStatus>("all");
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showingWinners, setShowingWinners] = useState(false);
+  const [editingConcept, setEditingConcept] = useState<AdConcept | null>(null);
+  const [generatingImages, setGeneratingImages] = useState(false);
 
   if (!hydrated) {
     return (
@@ -115,6 +120,44 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
 
       {/* Drive folder shortcuts */}
       <DriveFoldersBar />
+
+      {/* Concept review (Phase 1.5) — shows when Claude wrote concepts and
+          the user hasn't kicked off image generation yet. Stays visible
+          during generating-images so users can see what they approved. */}
+      {batch.concepts && batch.concepts.length > 0 && (
+        <ConceptReview
+          batch={batch}
+          onEdit={(c) => setEditingConcept(c)}
+          onChangeStatus={async (conceptId, status) => {
+            await fetch("/api/ad-generator/concepts/update", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ batchId, conceptId, status }),
+            });
+            await refresh();
+          }}
+          onGenerateImages={async () => {
+            setGeneratingImages(true);
+            try {
+              const res = await fetch("/api/ad-generator/generate-images", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ batchId }),
+              });
+              if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Generation failed");
+              }
+              await refresh();
+            } catch (err) {
+              alert(err instanceof Error ? err.message : "Something went wrong");
+            } finally {
+              setGeneratingImages(false);
+            }
+          }}
+          generating={generatingImages}
+        />
+      )}
 
       {/* Filters */}
       <div className="flex gap-2 flex-wrap">
@@ -268,6 +311,343 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
           </div>
         </div>
       )}
+
+      {/* Concept edit modal */}
+      {editingConcept && (
+        <ConceptEditModal
+          concept={editingConcept}
+          onClose={() => setEditingConcept(null)}
+          onSave={async (headline, visualPrompt, hook) => {
+            await fetch("/api/ad-generator/concepts/update", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                batchId,
+                conceptId: editingConcept.id,
+                headline,
+                visualPrompt,
+                hook,
+              }),
+            });
+            setEditingConcept(null);
+            await refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Concept review section — shown when Claude has written concepts and the
+// user hasn't yet kicked off image generation (or while it's running).
+// ───────────────────────────────────────────────────────────────────────────
+
+function ConceptReview({
+  batch,
+  onEdit,
+  onChangeStatus,
+  onGenerateImages,
+  generating,
+}: {
+  batch: {
+    status: string;
+    concepts?: AdConcept[];
+    textMode?: string;
+  };
+  onEdit: (c: AdConcept) => void;
+  onChangeStatus: (conceptId: string, status: ConceptStatus) => Promise<void>;
+  onGenerateImages: () => Promise<void>;
+  generating: boolean;
+}) {
+  const concepts = batch.concepts || [];
+  const approvedCount = concepts.filter(
+    (c) => c.status === "approved" || c.status === "edited"
+  ).length;
+  const pendingCount = concepts.filter((c) => c.status === "pending").length;
+  const rejectedCount = concepts.filter((c) => c.status === "rejected").length;
+
+  const isReviewActive = batch.status === "concepts-pending";
+  const isGeneratingPhase = batch.status === "generating-images";
+  const isFinished =
+    batch.status === "ready-for-review" ||
+    batch.status === "approved" ||
+    batch.status === "rejected";
+
+  return (
+    <div className="rounded-xl border border-zunesty-green-dark/30 bg-zunesty-green-darkest/20 p-5">
+      <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
+        <div>
+          <h3 className="text-lg font-semibold text-zunesty-light">
+            ✏️ Concepts {isFinished ? "(reviewed)" : "review"}
+          </h3>
+          <p className="text-xs text-zunesty-light/50 mt-1">
+            {isReviewActive &&
+              "Approve, reject, or edit each concept. Only approved/edited concepts will be sent to KIE AI for image generation."}
+            {isGeneratingPhase &&
+              "Image generation is running for the approved concepts. Creatives will appear below as they finish."}
+            {isFinished &&
+              "These are the concepts that seeded this batch. Edits are locked once generation has run."}
+          </p>
+          <p className="text-xs text-zunesty-light/40 mt-2">
+            {concepts.length} total · {approvedCount} approved ·{" "}
+            {pendingCount} pending · {rejectedCount} rejected
+          </p>
+        </div>
+        {isReviewActive && (
+          <button
+            onClick={onGenerateImages}
+            disabled={generating || approvedCount === 0}
+            className="rounded-lg bg-zunesty-green px-5 py-2.5 text-sm font-semibold text-zunesty-black hover:bg-zunesty-green/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {generating
+              ? "Starting..."
+              : `Generate images for ${approvedCount} approved →`}
+          </button>
+        )}
+        {isGeneratingPhase && (
+          <span className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-300">
+            Generating images...
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {concepts.map((c, i) => (
+          <ConceptCard
+            key={c.id}
+            concept={c}
+            index={i}
+            editable={isReviewActive}
+            onEdit={() => onEdit(c)}
+            onApprove={() => onChangeStatus(c.id, "approved")}
+            onReject={() => onChangeStatus(c.id, "rejected")}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ConceptCard({
+  concept,
+  index,
+  editable,
+  onEdit,
+  onApprove,
+  onReject,
+}: {
+  concept: AdConcept;
+  index: number;
+  editable: boolean;
+  onEdit: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  const angleLabel =
+    ANGLES.find((a) => a.id === concept.angle)?.label || concept.angle;
+  const statusConfig: Record<
+    ConceptStatus,
+    { label: string; classes: string }
+  > = {
+    pending: {
+      label: "Pending",
+      classes:
+        "text-zunesty-light/60 bg-zunesty-light/5 border-zunesty-light/20",
+    },
+    approved: {
+      label: "Approved",
+      classes:
+        "text-zunesty-green bg-zunesty-green/10 border-zunesty-green/40",
+    },
+    edited: {
+      label: "Edited & approved",
+      classes: "text-sky-300 bg-sky-500/10 border-sky-500/30",
+    },
+    rejected: {
+      label: "Rejected",
+      classes: "text-red-400 bg-red-500/10 border-red-500/30",
+    },
+  };
+  const sc = statusConfig[concept.status];
+  const dimmed = concept.status === "rejected";
+
+  return (
+    <div
+      className={`rounded-lg border p-4 transition-colors ${
+        dimmed
+          ? "border-red-500/20 bg-red-500/5 opacity-60"
+          : "border-zunesty-green-dark/30 bg-zunesty-green-darkest/40"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono text-zunesty-light/40">
+            #{index + 1}
+          </span>
+          <span className="text-[10px] uppercase tracking-wider text-zunesty-green/80 font-semibold">
+            {angleLabel}
+          </span>
+          {concept.includesPerson !== undefined && (
+            <span className="text-[10px] text-zunesty-light/40">
+              · {concept.includesPerson ? "with person" : "no person"}
+            </span>
+          )}
+        </div>
+        <span
+          className={`text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${sc.classes}`}
+        >
+          {sc.label}
+        </span>
+      </div>
+
+      <p className="text-sm font-semibold text-zunesty-light leading-snug mb-2">
+        {concept.headline}
+      </p>
+      {concept.hook && (
+        <p className="text-xs text-zunesty-light/60 italic mb-2">
+          &ldquo;{concept.hook}&rdquo;
+        </p>
+      )}
+      <p className="text-[11px] text-zunesty-light/40 leading-relaxed mb-3">
+        <span className="uppercase tracking-wider text-zunesty-light/30 font-semibold">
+          Scene:
+        </span>{" "}
+        {concept.visualPrompt}
+      </p>
+
+      {editable && (
+        <div className="flex gap-2 pt-2 border-t border-zunesty-green-dark/20">
+          <button
+            onClick={onApprove}
+            disabled={
+              concept.status === "approved" || concept.status === "edited"
+            }
+            className="flex-1 rounded-lg bg-zunesty-green/80 px-3 py-1.5 text-xs font-semibold text-zunesty-black hover:bg-zunesty-green transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Approve
+          </button>
+          <button
+            onClick={onEdit}
+            className="flex-1 rounded-lg border border-zunesty-green-dark/40 bg-zunesty-green-darkest/40 px-3 py-1.5 text-xs font-semibold text-zunesty-light/80 hover:border-zunesty-green-dark/70 hover:text-zunesty-light transition-colors"
+          >
+            ✏️ Edit
+          </button>
+          <button
+            onClick={onReject}
+            disabled={concept.status === "rejected"}
+            className="flex-1 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Reject
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConceptEditModal({
+  concept,
+  onClose,
+  onSave,
+}: {
+  concept: AdConcept;
+  onClose: () => void;
+  onSave: (headline: string, visualPrompt: string, hook: string) => Promise<void>;
+}) {
+  const [headline, setHeadline] = useState(concept.headline);
+  const [visualPrompt, setVisualPrompt] = useState(concept.visualPrompt);
+  const [hook, setHook] = useState(concept.hook);
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <div
+      className="fixed inset-0 bg-zunesty-black/70 flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-zunesty-green-darkest border border-zunesty-green/40 rounded-xl p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-zunesty-light">
+              Edit concept
+            </h3>
+            <p className="text-xs text-zunesty-light/50 mt-1">
+              Changes set the concept status to &ldquo;Edited &amp; approved&rdquo;.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-zunesty-light/40 hover:text-zunesty-light text-lg leading-none"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-zunesty-light/70 mb-1.5">
+              Headline (goes on the image)
+            </label>
+            <input
+              type="text"
+              value={headline}
+              onChange={(e) => setHeadline(e.target.value)}
+              className="w-full rounded-lg border border-zunesty-green-dark/40 bg-zunesty-green-darkest/60 px-4 py-3 text-sm text-zunesty-light focus:border-zunesty-green focus:outline-none transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zunesty-light/70 mb-1.5">
+              Hook (context only — not shown on image)
+            </label>
+            <input
+              type="text"
+              value={hook}
+              onChange={(e) => setHook(e.target.value)}
+              className="w-full rounded-lg border border-zunesty-green-dark/40 bg-zunesty-green-darkest/60 px-4 py-3 text-sm text-zunesty-light focus:border-zunesty-green focus:outline-none transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zunesty-light/70 mb-1.5">
+              Visual prompt (scene description sent to Nano Banana)
+            </label>
+            <textarea
+              value={visualPrompt}
+              onChange={(e) => setVisualPrompt(e.target.value)}
+              rows={6}
+              className="w-full rounded-lg border border-zunesty-green-dark/40 bg-zunesty-green-darkest/60 px-4 py-3 text-sm text-zunesty-light focus:border-zunesty-green focus:outline-none transition-colors resize-y"
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-2 justify-end mt-6">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-lg border border-zunesty-green-dark/40 px-4 py-2 text-sm text-zunesty-light/70 hover:text-zunesty-light transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await onSave(headline, visualPrompt, hook);
+              } finally {
+                setSaving(false);
+              }
+            }}
+            disabled={saving}
+            className="rounded-lg bg-zunesty-green px-4 py-2 text-sm font-semibold text-zunesty-black hover:bg-zunesty-green/90 transition-colors disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Save & approve"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

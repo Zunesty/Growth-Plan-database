@@ -282,7 +282,37 @@ export type AdCreative = {
   createdAt: string;
 };
 
-export type BatchStatus = "queued" | "running" | "ready-for-review" | "approved" | "rejected";
+export type BatchStatus =
+  | "queued"
+  | "concepts-pending" // Claude wrote concepts, awaiting user review
+  | "generating-images" // user approved concepts, KIE AI pipeline running
+  | "running" // legacy / direct-mode batches (concept review skipped)
+  | "ready-for-review"
+  | "approved"
+  | "rejected";
+
+export type ConceptStatus = "pending" | "approved" | "rejected" | "edited";
+
+/**
+ * One ad concept Claude generated. Lives on AdBatch.concepts. The user can
+ * approve, reject, or edit each one before the KIE AI image pipeline runs.
+ * - status "pending"   → no decision yet
+ * - status "approved"  → eligible for image generation as-is
+ * - status "rejected"  → skipped in image generation
+ * - status "edited"    → user modified headline/visualPrompt; eligible for
+ *                        image generation with the edited values
+ */
+export type AdConcept = {
+  id: string;
+  angle: AdAngle;
+  includesPerson?: boolean;
+  headline: string;
+  hook: string;
+  visualPrompt: string;
+  status: ConceptStatus;
+  /** ISO timestamp set when the user last edited this concept. */
+  editedAt?: string;
+};
 
 /**
  * Whether the generated creatives should carry an overlaid headline or come
@@ -301,6 +331,13 @@ export type AdBatch = {
   outputFolderId?: string;
   /** Drive web view URL for the per-batch output subfolder. */
   outputFolderUrl?: string;
+  /**
+   * Claude's ad concepts for this batch. Populated by the generate-concepts
+   * endpoint. Users approve / reject / edit them before generate-images
+   * runs the KIE AI pipeline on the approved subset. Empty when the batch
+   * was generated in direct (skip-review) mode.
+   */
+  concepts?: AdConcept[];
   status: BatchStatus;
   targetCount: number;
   generatedCount: number;

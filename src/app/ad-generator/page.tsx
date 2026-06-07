@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import DriveFoldersBar from "@/components/DriveFoldersBar";
 import { useBatches, createBatch } from "@/lib/ad-generator-store";
 import {
@@ -27,6 +28,8 @@ export default function AdGeneratorPage() {
   const [selectedProduct, setSelectedProduct] =
     useState<AdProductSelection>("dopamine-brain-food");
   const [textMode, setTextMode] = useState<AdTextMode>("text");
+  const [skipReview, setSkipReview] = useState(false);
+  const router = useRouter();
   const [bottlePreview, setBottlePreview] = useState<BottlePreview[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
 
@@ -65,11 +68,14 @@ export default function AdGeneratorPage() {
         source: "mock" | "triple-whale";
       };
 
-      // 2. Create batch record
+      // 2. Create batch record. Status differs based on review mode:
+      //    - skip-review → "running" (direct mode, images about to flow)
+      //    - default     → "concepts-pending" (Claude will write concepts,
+      //                    user reviews them, then approves for image gen)
       const batch: AdBatch = {
         id: `batch-${Date.now()}`,
         product: selectedProduct,
-        status: "running",
+        status: skipReview ? "running" : "concepts-pending",
         targetCount: count,
         generatedCount: 0,
         approvedCount: 0,
@@ -82,8 +88,11 @@ export default function AdGeneratorPage() {
       };
       await createBatch(batch);
 
-      // 3. Trigger the actual generation
-      const genRes = await fetch("/api/ad-generator/generate", {
+      // 3. Trigger the appropriate endpoint.
+      const endpoint = skipReview
+        ? "/api/ad-generator/generate"
+        : "/api/ad-generator/generate-concepts";
+      const genRes = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -101,13 +110,17 @@ export default function AdGeneratorPage() {
         throw new Error(err.error || "Generation failed");
       }
 
-      // Note: Triple Whale is still mocked. We surface that in the new-batch
-      // modal copy rather than a blocking alert that confused Austin.
       void source;
 
       setShowNewBatch(false);
       setNotes("");
       await refresh();
+
+      // For the review flow, take the user straight to the batch detail page
+      // so they can review concepts as soon as Claude finishes.
+      if (!skipReview) {
+        router.push(`/ad-generator/${batch.id}`);
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -337,6 +350,25 @@ export default function AdGeneratorPage() {
                   className="w-full rounded-lg border border-zunesty-green-dark/40 bg-zunesty-green-darkest/60 px-4 py-3 text-sm text-zunesty-light placeholder:text-zunesty-light/25 focus:border-zunesty-green focus:outline-none transition-colors resize-y"
                 />
               </div>
+
+              {/* Skip review toggle: default off so Austin's review step runs */}
+              <label className="flex items-start gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={skipReview}
+                  onChange={(e) => setSkipReview(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-zunesty-green cursor-pointer"
+                />
+                <div>
+                  <p className="text-xs font-medium text-zunesty-light/80">
+                    Skip concept review
+                  </p>
+                  <p className="text-[10px] text-zunesty-light/40 mt-0.5">
+                    Generate images immediately without reviewing Claude&apos;s
+                    headlines + scene prompts first.
+                  </p>
+                </div>
+              </label>
 
             </div>
 
