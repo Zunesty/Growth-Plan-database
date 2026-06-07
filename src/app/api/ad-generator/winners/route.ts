@@ -45,6 +45,9 @@ export async function POST(req: NextRequest) {
     const apiKey = process.env.TRIPLE_WHALE_API_KEY;
     const shopId = process.env.TRIPLE_WHALE_SHOP_ID;
 
+    let tripleWhaleError: string | undefined;
+    let tripleWhaleZeroRows = false;
+
     if (apiKey && shopId) {
       try {
         const winners = await getWinningAdsFromTripleWhale(
@@ -59,12 +62,14 @@ export async function POST(req: NextRequest) {
             source: "triple-whale",
           });
         }
+        tripleWhaleZeroRows = true;
         console.warn(
           "Triple Whale returned 0 winners — falling back to mock seeds."
         );
       } catch (twErr) {
+        tripleWhaleError =
+          twErr instanceof Error ? twErr.message : String(twErr);
         console.error("Triple Whale fetch failed, falling back to mock:", twErr);
-        // Fall through to mock response below
       }
     }
 
@@ -73,9 +78,16 @@ export async function POST(req: NextRequest) {
       criteria: WINNER_CRITERIA,
       product,
       source: "mock",
-      message: apiKey
-        ? "Triple Whale call failed or returned no rows. Using mock winners — check server logs for the exact error."
+      message: apiKey && shopId
+        ? tripleWhaleError
+          ? `Triple Whale call failed: ${tripleWhaleError}`
+          : tripleWhaleZeroRows
+            ? "Triple Whale returned 0 winning ads matching the criteria. Using mock seeds."
+            : "Triple Whale fell back unexpectedly. Check server logs."
         : "TRIPLE_WHALE_API_KEY / TRIPLE_WHALE_SHOP_ID not configured. Using mock winners.",
+      tripleWhaleError,
+      tripleWhaleZeroRows,
+      tripleWhaleConfigured: !!(apiKey && shopId),
     });
   } catch (error) {
     console.error("Winners endpoint error:", error);
