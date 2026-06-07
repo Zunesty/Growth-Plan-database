@@ -47,23 +47,28 @@ function ymd(date: Date): string {
  * Uses Triple Whale's @startDate / @endDate placeholders rather than
  * inlining the dates — those get bound from the `period` field on the
  * request body.
+ *
+ * Note: `cpa` is documented as a column but is actually a derived metric
+ * computed as SUM(spend) / SUM(conversions). Referencing it directly
+ * returns "Unknown expression or function identifier `cpa`". We compute
+ * it in the SELECT instead and use the same computation in HAVING/ORDER.
  */
 function buildWinnersSql(criteria: WinnerCriteria): string {
+  const cpaExpr = "SUM(spend) / NULLIF(SUM(conversions), 0)";
   return `
 SELECT
   ad_id,
-  MAX(ad_name)       AS ad_name,
-  MAX(ad_image_url)  AS ad_image_url,
-  SUM(spend)         AS total_spend,
-  SUM(conversions)   AS total_conversions,
-  AVG(cpa)           AS avg_cpa
+  MAX(ad_name)        AS ad_name,
+  MAX(ad_image_url)   AS ad_image_url,
+  SUM(spend)          AS total_spend,
+  SUM(conversions)    AS total_conversions,
+  ${cpaExpr}          AS avg_cpa
 FROM ads_table
 WHERE event_date BETWEEN @startDate AND @endDate
-  AND cpa IS NOT NULL
 GROUP BY ad_id
 HAVING SUM(conversions) >= ${criteria.minSales}
-   AND AVG(cpa)        <= ${criteria.maxCPA}
-ORDER BY AVG(cpa) ASC
+   AND ${cpaExpr}     <= ${criteria.maxCPA}
+ORDER BY ${cpaExpr} ASC
 LIMIT 10
 `.trim();
 }
@@ -86,10 +91,14 @@ export async function getWinningAdsFromTripleWhale(
     currency: "USD",
   };
 
+  // Triple Whale auth uses x-api-key, NOT Authorization: Bearer.
+  // The Bearer header makes the gateway try to parse the value as a JWT
+  // and fail with "Invalid iss". The /triple-whale-test endpoint confirmed
+  // x-api-key returns 2xx / valid responses.
   const res = await fetch(ENDPOINT, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${config.apiKey}`,
+      "x-api-key": config.apiKey,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
