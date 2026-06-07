@@ -476,6 +476,8 @@ function Counter({
 function BatchStatusBadge({ status }: { status: AdBatch["status"] }) {
   const config: Record<AdBatch["status"], { label: string; color: string; bg: string; border: string }> = {
     queued: { label: "Queued", color: "text-zunesty-light/60", bg: "bg-zunesty-light/10", border: "border-zunesty-light/20" },
+    "concepts-pending": { label: "Concepts — Review", color: "text-sky-300", bg: "bg-sky-500/10", border: "border-sky-500/30" },
+    "generating-images": { label: "Generating Images", color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" },
     running: { label: "Generating", color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" },
     "ready-for-review": { label: "Ready for Review", color: "text-zunesty-green", bg: "bg-zunesty-green/15", border: "border-zunesty-green/30" },
     approved: { label: "Approved", color: "text-zunesty-green", bg: "bg-zunesty-green/15", border: "border-zunesty-green/30" },
