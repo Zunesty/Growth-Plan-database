@@ -65,6 +65,8 @@ SELECT
   ${cpaExpr}          AS avg_cpa
 FROM ads_table
 WHERE event_date BETWEEN @startDate AND @endDate
+  AND ad_id != ''
+  AND ad_id IS NOT NULL
 GROUP BY ad_id
 HAVING SUM(conversions) >= ${criteria.minSales}
    AND ${cpaExpr}     <= ${criteria.maxCPA}
