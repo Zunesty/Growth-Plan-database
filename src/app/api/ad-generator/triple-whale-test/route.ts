@@ -12,31 +12,12 @@
 // domain.
 
 import { WINNER_CRITERIA } from "@/lib/ad-generator-types";
+import { buildWinnersSql } from "@/lib/triple-whale";
 
 const ENDPOINT = "https://api.triplewhale.com/api/v2/orcabase/api/sql";
 
 function ymd(d: Date): string {
   return d.toISOString().slice(0, 10);
-}
-
-function buildSql(): string {
-  return `
-SELECT
-  ad_id,
-  MAX(ad_name)       AS ad_name,
-  MAX(ad_image_url)  AS ad_image_url,
-  SUM(spend)         AS total_spend,
-  SUM(conversions)   AS total_conversions,
-  AVG(cpa)           AS avg_cpa
-FROM ads_table
-WHERE event_date BETWEEN @startDate AND @endDate
-  AND cpa IS NOT NULL
-GROUP BY ad_id
-HAVING SUM(conversions) >= ${WINNER_CRITERIA.minSales}
-   AND AVG(cpa)        <= ${WINNER_CRITERIA.maxCPA}
-ORDER BY AVG(cpa) ASC
-LIMIT 10
-`.trim();
 }
 
 async function tryFetch(headers: Record<string, string>, body: object) {
@@ -87,7 +68,7 @@ export async function GET() {
 
   const body = {
     shopId,
-    query: buildSql(),
+    query: buildWinnersSql(WINNER_CRITERIA),
     period: {
       startDate: ymd(start),
       endDate: ymd(now),

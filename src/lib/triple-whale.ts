@@ -53,7 +53,7 @@ function ymd(date: Date): string {
  * returns "Unknown expression or function identifier `cpa`". We compute
  * it in the SELECT instead and use the same computation in HAVING/ORDER.
  */
-function buildWinnersSql(criteria: WinnerCriteria): string {
+export function buildWinnersSql(criteria: WinnerCriteria): string {
   const cpaExpr = "SUM(spend) / NULLIF(SUM(conversions), 0)";
   return `
 SELECT
