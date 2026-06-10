@@ -42,22 +42,29 @@ export const PRODUCTS: ProductConfig[] = [
     id: "dopamine-brain-food",
     name: "Dopamine Brain Food",
     bottleFolderName: "DopamineBrainFood",
+    // Austin's June 2026 prompt rewrite — tagline + claims locked to
+    // approved structure/function language. Blue bottle, "Morning Support
+    // for Mental Drive", vegan capsules, stimulant- and caffeine-free.
     tagline: "For improved motor function and mood",
     activeIngredients: "L-Tyrosine + B-vitamins (B6 P5P, Folate, B12)",
     benefitClaims: [
-      "supports motor function",
-      "promotes a positive mood",
+      "supports the body's natural dopamine production",
+      "promotes dopamine production already within a healthy range",
       "supports mental drive and motivation",
       "helps maintain focus on demanding tasks",
-      "supports the body's natural dopamine production",
+      "promotes a positive mood",
+      "supports motor function",
+      "stimulant-free / caffeine-free / no jitters / no crash",
     ],
     themes: [
       "morning ritual",
-      "motivation",
       "mental drive",
-      "mood support",
+      "motivation",
+      "focus",
+      "positive mood",
       "starting the day strong",
-      "pushing through a stuck moment",
+      "pushing through a stuck or sluggish moment",
+      "steady energy without caffeine",
     ],
     active: true,
   },
@@ -212,29 +219,29 @@ export type WinningAd = {
   imageUrl?: string; // reference image from the original ad
 };
 
+// Austin's angle taxonomy for Dopamine Brain Food (June 2026 rewrite).
+// Spreads concepts across emotional / functional / social-proof axes.
 export type AdAngle =
-  | "morning-ritual"
+  | "anti-stimulant"
+  | "no-crash"
+  | "morning-momentum"
+  | "drive-motivation"
   | "focus-protocol"
-  | "biohacker-stack"
+  | "mood-support"
   | "transparency"
-  | "scientist-formulated"
-  | "before-after"
-  | "ingredient-spotlight"
   | "user-testimonial"
-  | "competitor-comparison"
-  | "value-stack";
+  | "social-proof";
 
 export const ANGLES: { id: AdAngle; label: string }[] = [
-  { id: "morning-ritual", label: "Morning Ritual" },
+  { id: "anti-stimulant", label: "Anti-Stimulant" },
+  { id: "no-crash", label: "No Crash" },
+  { id: "morning-momentum", label: "Morning Momentum" },
+  { id: "drive-motivation", label: "Drive / Motivation" },
   { id: "focus-protocol", label: "Focus Protocol" },
-  { id: "biohacker-stack", label: "Biohacker Stack" },
+  { id: "mood-support", label: "Mood Support" },
   { id: "transparency", label: "Transparency / Open-Source" },
-  { id: "scientist-formulated", label: "Scientist-Formulated" },
-  { id: "before-after", label: "Before / After" },
-  { id: "ingredient-spotlight", label: "Ingredient Spotlight" },
   { id: "user-testimonial", label: "User Testimonial" },
-  { id: "competitor-comparison", label: "vs. Competitors" },
-  { id: "value-stack", label: "Value Stack" },
+  { id: "social-proof", label: "Social Proof" },
 ];
 
 export type CreativeStatus = "generating" | "ready" | "approved" | "rejected" | "failed";

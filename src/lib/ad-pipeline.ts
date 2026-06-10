@@ -412,27 +412,42 @@ async function getSourceImage(
 }
 
 function buildEditPrompt(visualPrompt: string, headline?: string): string {
-  const parts = [
-    "Take the supplement bottle shown in the reference image and place it naturally into the scene described below.",
-    "Keep the bottle's exact label, color, shape, and branding identical to the reference — do not redesign or rename it.",
-    "Match the scene's lighting and perspective so the bottle looks like it belongs there.",
+  // Austin's June 2026 Prompt 2 rewrite. Two paths:
+  //   - With headline → render text in the image (KIE-text branch).
+  //   - No headline   → omit the HEADLINE + TEXT PLACEMENT blocks entirely
+  //                     (no-text batch OR our sharp overlay handles text).
+  const blocks: string[] = [
+    `You are compositing a single advertising image for the supplement "Dopamine Brain Food."
+
+THE PRODUCT (non-negotiable):
+- Use the EXACT bottle shown in the reference image. Keep its label, colors, shape, branding, and text identical to the reference. Do NOT redesign, recolor, rename, restyle, or "improve" it. Do NOT generate any other product. The ONLY product in this image is the Dopamine Brain Food bottle from the reference.
+- Place the bottle naturally into the scene below. Match the scene's lighting direction, color temperature, perspective, and shadows so it sits believably in the environment.
+- Keep the bottle fully visible and in sharp focus, in the LOWER HALF of the frame, with clear empty space above it. Keep the label crisp; do not add, remove, or alter any words on the label.`,
+
+    `NO INVENTED TEXT ANYWHERE:
+- The reference bottle's own label is the ONLY product text allowed.
+- Do NOT render any other text in the scene — no signage, documents, supplement-facts panels, readable phone or laptop screens, or packaging copy. If a screen, paper, book, or label appears, keep it blank, blurred, turned away, or out of focus.${headline ? " Any image text other than the headline below is a failure." : " Any image text other than the reference bottle's own label is a failure."}`,
   ];
 
   if (headline) {
-    parts.push(
-      "",
-      `Render this exact headline as large bold white text in the UPPER portion of the image: "${headline}".`,
-      "Use one or two lines, sans-serif, high contrast against the background. No other text anywhere in the image.",
-      "Spell the headline EXACTLY as written — do not paraphrase or change any words.",
-      "CRITICAL placement rules — these are non-negotiable:",
-      "- Position the text in EMPTY background space. NEVER place text overlapping any person's face, hands, or the product bottle. The bottle must remain fully visible and unobscured by text at all times.",
-      "- Place the text in the top portion of the image, ABOVE any person, subject, or bottle. If the person or bottle is positioned high in the frame, move the text further up into empty sky / wall / ceiling area, or do NOT render text on this image.",
-      "- This image is for Instagram (Story / Reels). Keep the text within the central 70% vertical band: avoid the very top ~15% and very bottom ~20% of the frame where Instagram overlays the username and action buttons."
+    blocks.push(
+      `HEADLINE (render into the image):
+- Render EXACTLY this headline, spelled verbatim — no paraphrasing, no added or dropped words:
+  "${headline}"
+- Use a clean, simple, modern sans-serif — like a phone's default system font. Plain and highly legible. NO decorative, script, condensed, distorted, outlined, or novelty fonts. Letters evenly spaced and correctly formed. One or two lines only, large and bold.
+- COLOR FOR LEGIBILITY (adaptive): if the area behind the text is light, render the text in near-black (#111111). If the area behind the text is dark, render it in white (#FFFFFF). Choose whichever gives strong contrast. If contrast is borderline, add a subtle soft shadow or a faint darkening/lightening behind the text — never a hard box.`,
+
+      `TEXT PLACEMENT (non-negotiable):
+- Place the headline in EMPTY background space in the TOP THIRD of the frame, ABOVE the bottle and any person. Never overlap a face, hands, or the bottle.
+- Keep text within the central ~70% vertical band — clear of the top ~15% and bottom ~20% where Instagram UI sits.
+- If the only empty space is small or busy, move the text to the cleanest open area available rather than crowding the subject.`
     );
   }
 
-  parts.push("");
-  return [...parts, "Scene:", visualPrompt].join("\n");
+  blocks.push(`SCENE:
+${visualPrompt}`);
+
+  return blocks.join("\n\n");
 }
 
 async function mapWithConcurrency<T, R>(
@@ -518,29 +533,62 @@ async function ideateConcepts(
   count: number,
   productConfig: ProductConfig | null
 ) {
-  const productBlock = productConfig
-    ? `Product: ${productConfig.name}
-Tagline: ${productConfig.tagline}
-Active ingredients (for your context, NEVER claim in copy): ${productConfig.activeIngredients}
+  // Austin's June 2026 rewrite — locked to Dopamine Brain Food. We retain
+  // the productConfig parameter for future-proofing (other products will
+  // need their own prompt) but currently always run the DBF prompt.
+  // If a non-DBF product is selected, we still inject DBF's language because
+  // NeuroFuel + MagTech are inactive.
+  void productConfig;
 
-Allowed benefit language (lean on these — they're FDA structure-function safe):
-${productConfig.benefitClaims.map((b) => `- ${b}`).join("\n")}
+  const personTrue = Math.round(count * 0.4); // Austin: ~4 true / ~6 false at 10
+  const personFalse = count - personTrue;
 
-Themes that fit this product:
-${productConfig.themes.map((t) => `- ${t}`).join("\n")}`
-    : `Product: Natural Stacks supplements (mixed batch — concepts can lean toward any of: Dopamine Brain Food for motivation/mood, NeuroFuel for focus/memory, MagTech for sleep/relaxation). Pick the slant that fits each concept.`;
+  const ideationPrompt = `You are a senior performance-marketing strategist for Natural Stacks. You create scroll-stopping Instagram/Facebook ad concepts for ONE product only.
 
-  const ideationPrompt = `You are a senior performance marketing strategist for Natural Stacks, a premium nootropic brand.
+PRODUCT: Dopamine Brain Food
+- A premium dopamine-support nootropic. Blue bottle, "Morning Support for Mental Drive," vegan capsules, stimulant- and caffeine-free.
+- Tagline: For improved motor function and mood.
+- Active ingredients (CONTEXT ONLY — never state in copy): L-Tyrosine + B-vitamins (B6 P5P, Folate, B12).
 
-${productBlock}
+This system generates ads for Dopamine Brain Food and NOTHING ELSE. Never reference, name, or imply any other product (no NeuroFuel, no MagTech, no other SKU). Never invent a product name.
 
-Brand voice: Open-source, transparent, biohacker-friendly, science-backed but human.
+APPROVED BENEFIT LANGUAGE (lean on these — FDA structure/function safe):
+- supports the body's natural dopamine production / promotes dopamine production already within a healthy range
+- supports mental drive and motivation
+- helps maintain focus on demanding tasks
+- promotes a positive mood
+- supports motor function
+- stimulant-free / caffeine-free / no jitters / no crash
 
-PLACEMENT: These ads will run on INSTAGRAM (Story / Reels / Feed). They must look like native Instagram content — iPhone photos, real environments, no stock-photo polish. Think: a post a real Natural Stacks customer would share.
+THEMES THAT FIT THIS PRODUCT:
+morning ritual · mental drive · motivation · focus · positive mood · starting the day strong · pushing through a stuck or sluggish moment · steady energy without caffeine
 
-Below are ${winners.length} ads currently winning in the Meta account (CPA ≤ $70). Use them as PATTERNS — same angles, hooks, and visual styles that are working — but generate fresh variations.
+BRAND VOICE: transparent, biohacker-friendly, science-backed but human. Confident, plain-spoken, never hypey.
 
-WINNING ADS:
+────────────────────────────────────────────────────────────────────────
+WINNING-AD PRINCIPLES — distilled from ads currently converting on Meta. Use them as the creative engine. Apply the PRINCIPLE; do not copy the example.
+
+1. LEAD WITH THE ENEMY, THEN THE RELIEF. Top performers contrast against the downsides of caffeine, stimulants, and "pills with side effects" — jitters, crashes, poor sleep, irritability — then present Dopamine Brain Food as the clean way to get drive and focus. Hook on cultural fatigue with being over-caffeinated and over-stimulated.
+   COMPLIANCE GUARDRAIL: contrast against "caffeine," "stimulants," "crashes," "jitters," and "side effects" in GENERAL terms only. NEVER name a specific drug, drug category, or condition, and NEVER call the product a "natural alternative to" anything.
+
+2. SHORT, PUNCHY, RHYTHMIC. The best headlines are staccato and parallel — three beats, readable in under a second. Patterns (do not copy): "No Caffeine. No Crash. Just Results." / "Stay Driven. Stay Focused. Stay Awake."
+
+3. NAME A CONCRETE MOMENT. Anchor to a specific, relatable scene or time: the 3 PM slump, the sluggish morning, the to-do list you can't start.
+
+4. BENEFIT-FORWARD, ALWAYS IN APPROVED LANGUAGE. Every concept makes ONE clear benefit promise (drive, motivation, focus, mood, no-crash), in the approved language above.
+
+5. SOCIAL PROOF WHEN IT FITS. Lines like "Join 100,000+ focused achievers" perform — use sparingly, as the hook, never stacked with other claims.
+
+6. LOOK NATIVE, NOT LIKE AN AD. The scene feels like organic phone-shot content a real customer would post — casual, real environments, real hands. Clarity and cultural relevance beat polish.
+
+7. ONE IDEA PER AD. Each concept makes a single point.
+
+VARIETY MANDATE: across the batch, every concept must differ in angle, scene, pain-moment, and copy rhythm. No two may share the same hook or the same setting. Avoid recycling the same openers ("Stop dragging…", "Tired of…") batch after batch — push for fresh, on-trend phrasings.
+
+────────────────────────────────────────────────────────────────────────
+INPUT — WINNING ADS FROM THE ACCOUNT (from Triple Whale or mocked).
+Treat them as PATTERNS to riff on, not templates to copy.
+
 ${winners
   .map(
     (w, i) => `
@@ -552,56 +600,52 @@ Winner ${i + 1}:
   )
   .join("\n")}
 
-TASK: Generate EXACTLY ${count} new ad concepts — no more, no less. The output JSON array MUST contain exactly ${count} elements. Each must include:
-- angle: pick ONE from this list — ${ANGLES.map((a) => a.id).join(", ")}
-- includesPerson: true or false (see split rule below)
-- headline: ONE punchy sentence, 5-9 words, max 50 characters. NOT a fragment, NOT a tagline pair. It will be rendered in very large white text on top of the image, so it must read as a single beat. The headline must connect to this product specifically — use the allowed benefit language, not generic claims that fit another product.
-- hook: 1-sentence opening line for context (internal — not overlaid)
-- visualPrompt: detailed description of the SCENE that will surround the product bottle. UGC-style, real-looking, iPhone photo aesthetic, NOT stock photo and NOT studio. Include subject, setting, lighting, composition, props. The scene should fit one of the product's themes above. DO NOT describe the bottle itself — a real bottle photo gets composited in. Just describe the scene around it.
+────────────────────────────────────────────────────────────────────────
+PLACEMENT & COMPOSITION (every visualPrompt must respect this):
+- Vertical 9:16 (Instagram/Facebook Story, Reels, Feed).
+- Keep the TOP THIRD of the frame relatively clean/empty — headline text gets overlaid there and must not cross any face, hand, or the bottle.
+- The bottle sits in the LOWER HALF of the frame, with clear empty space above it.
+- Keep the top ~15% and bottom ~20% as clean margin for Instagram UI.
+- The reserved text zone should fall over a SIMPLE, EVEN-TONED area (open wall, sky, blurred background) so overlaid text stays legible — avoid busy backgrounds there.
 
-PERSON SPLIT — IMPORTANT:
-Of the ${count} concepts, exactly ${Math.ceil(count / 2)} MUST set includesPerson=true and feature a real person fitting the product's themes (e.g. focused at desk for NeuroFuel, winding down in bed for MagTech, getting after their morning for Dopamine Brain Food). The remaining ${Math.floor(count / 2)} should set includesPerson=false and focus on natural environments WITHOUT a person — bottle on a desk, kitchen counter, bedside table, gym bag, etc, again fitting the product's themes.
+PREFERRED ENVIRONMENTS (pick what fits — all read morning / drive / focus):
+home desk · sunlit kitchen counter · coffee shop · window seat · getting ready in the morning · gym bag or car console before a workout · walking trail.
+Props: ceramic mug, real books, notebook, AirPods, laptop (closed or screen NOT showing readable text), plant, water bottle.
+AVOID: studio lighting, plain seamless backdrops, stock-photo polish, sleep/bedtime/wind-down settings (wrong product), and any prop with readable text on it (screens, documents, packaging) — image models garble small text.
 
-SCENE COMPOSITION FOR INSTAGRAM — IMPORTANT:
-- This is a 9:16 vertical image (Instagram Story / Reels). Compose for vertical viewing.
-- Leave the TOP THIRD of the frame as relatively empty / clean background space. The headline text will be overlaid there, and it must NOT cross any person's face, hands, OR the product bottle. The bottle MUST be positioned in the lower half of the frame, not the upper half — there should be clear empty space above the bottle where text can sit without ever touching it.
-- Keep the very top ~15% and very bottom ~20% of the frame as clean margin where Instagram's UI overlays (username, swipe-up, send button) sit.
+────────────────────────────────────────────────────────────────────────
+TASK: Generate EXACTLY ${count} ad concepts as a JSON array (exactly ${count} elements). Each object:
 
-PREFERRED ENVIRONMENTS (pick what fits the product):
-- Home desk, coffee shop, sunlit window seat (focus / motivation products)
-- Bedside table, soft evening light, cozy bedroom, post-shower wind-down (sleep / relaxation products)
-- Morning kitchen with coffee, brushing teeth, getting ready (morning products)
-- Going for a walk, hiking trail rock, gym bag in a car (active products)
-- Wooden tables, ceramic mugs, real books, AirPods, notebooks as props
-Avoid: studio lighting, plain backdrops, hands-only awkward shots, anything that screams "stock photo".
+- "angle": ONE of — ${ANGLES.map((a) => a.id).join(", ")}. Spread angles across the batch.
+- "includesPerson": boolean. Aim for ~${personTrue} true / ~${personFalse} false across the batch. When true, prefer HANDS / POV / partial presence (a hand holding the bottle or a capsule, over-the-shoulder at a desk) over fully posed lifestyle models, which read as stock.
+- "headline": the line rendered large on the image. Short and punchy — ideally ≤ 7 words and ≤ 45 characters, max two lines. Must use approved benefit language and connect specifically to Dopamine Brain Food (drive / motivation / focus / mood / no-crash). Use the winning rhythms. NOT a fragment-pair tagline, NOT a long testimonial sentence.
+- "hook": one internal context line (NOT overlaid) — the insight behind the concept.
+- "visualPrompt": detailed SCENE description that will surround the bottle. Native, real-looking, phone-photo aesthetic — subject, setting, lighting, composition, props — fitting a theme above. DO NOT describe the bottle (a real bottle photo is composited in). Describe only the scene around it, and keep the text-zone clean per the rules.
 
-COMPLIANCE — FDA structure-function rules (21 CFR 101.93):
-- These are dietary supplements. We CANNOT claim to diagnose, treat, cure, mitigate, or prevent any disease.
-- Use "supports", "helps maintain", "promotes" — never "treats", "cures", "fixes", "reverses".
-- Do NOT mention any specific disease, drug name, or drug category.
-- Do NOT claim FDA approval, guaranteed results, miracle effects, or "no side effects".
-- BANNED words/phrases (immediate reject — do NOT use any of these):
-${BANNED_WORDS.join(", ")}
+COMPLIANCE — FDA structure/function (21 CFR 101.93). Dietary supplement; cannot diagnose, treat, cure, mitigate, or prevent disease.
+- Use "supports," "helps maintain," "promotes" — never "treats," "cures," "fixes," "reverses."
+- No specific disease, drug name, or drug category. No claim of FDA approval, guaranteed results, miracle effects, or "no side effects."
+- BANNED (immediate reject): ${BANNED_WORDS.join(", ")}
 
-Output as a JSON array. Examples:
+Return ONLY the JSON array, no other text.
+
+EXAMPLES (Dopamine Brain Food only):
 [
   {
-    "angle": "morning-ritual",
-    "includesPerson": true,
-    "headline": "Stop dragging through your mornings.",
-    "hook": "The first 3 hours are everything.",
-    "visualPrompt": "Realistic iPhone photo of a 30-something woman at her home desk, soft morning light through window, mug of coffee in hand, the bottle sitting on the desk next to her laptop, no-makeup natural look, slight grain, candid moment"
+    "angle": "no-crash",
+    "includesPerson": false,
+    "headline": "No caffeine. No crash. Just drive.",
+    "hook": "The whole win is steady drive without the stimulant rollercoaster.",
+    "visualPrompt": "Realistic iPhone photo of a sunlit kitchen counter in the morning, ceramic mug of coffee, a small potted plant, soft natural light from a window on the right, clean light wall filling the upper-left of the frame, slight grain, candid and uncluttered, bottle in the lower portion of the frame."
   },
   {
-    "angle": "study-session",
-    "includesPerson": false,
-    "headline": "Built for the deep-work hours.",
-    "hook": "When the work demands more than caffeine can give.",
-    "visualPrompt": "Cozy iPhone photo of a wooden desk in a sun-lit home office, open notebook with pen, laptop closed, ceramic mug of coffee steaming, bottle sitting beside the notebook, late-afternoon golden light, slight depth-of-field"
+    "angle": "morning-momentum",
+    "includesPerson": true,
+    "headline": "Build your morning momentum.",
+    "hook": "Drive you can feel from the first hour of the day.",
+    "visualPrompt": "Realistic iPhone photo, first-person POV of a hand reaching toward the bottle on a wooden home desk, closed laptop, open notebook, mug of coffee steaming, soft morning light from a window, plain wall in the upper third for text space, natural candid feel, slight depth of field."
   }
-]
-
-Return ONLY the JSON array, no other text.`;
+]`;
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
