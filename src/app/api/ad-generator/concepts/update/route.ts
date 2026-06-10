@@ -28,9 +28,18 @@ export async function POST(req: NextRequest) {
       headline?: string;
       visualPrompt?: string;
       hook?: string;
+      rejectionReason?: string;
     };
 
-    const { batchId, conceptId, status, headline, visualPrompt, hook } = body;
+    const {
+      batchId,
+      conceptId,
+      status,
+      headline,
+      visualPrompt,
+      hook,
+      rejectionReason,
+    } = body;
     if (!batchId || !conceptId) {
       return Response.json(
         { error: "Missing required fields: batchId, conceptId" },
@@ -74,6 +83,7 @@ export async function POST(req: NextRequest) {
       ...(hook !== undefined ? { hook } : {}),
       ...(status ? { status } : hasEdits ? { status: "edited" as const } : {}),
       ...(hasEdits ? { editedAt: new Date().toISOString() } : {}),
+      ...(rejectionReason !== undefined ? { rejectionReason } : {}),
     };
 
     const newConcepts = [...concepts];

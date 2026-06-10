@@ -319,6 +319,13 @@ export type AdConcept = {
   status: ConceptStatus;
   /** ISO timestamp set when the user last edited this concept. */
   editedAt?: string;
+  /**
+   * Why the user rejected this concept (free text). Captured by the same
+   * pattern the creative reject modal uses. Useful both as a record and as
+   * future input we can feed back into the Claude ideation prompt
+   * ("avoid these patterns we rejected last batch").
+   */
+  rejectionReason?: string;
 };
 
 /**

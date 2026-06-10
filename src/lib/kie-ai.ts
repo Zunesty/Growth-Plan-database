@@ -85,11 +85,11 @@ export async function generateImage(
     throw new Error(`KIE AI did not return a taskId: ${JSON.stringify(initJson)}`);
   }
 
-  // Poll for completion. Nano Banana 2 at 2K often takes 60-150s under load
-  // (heavier model than Nano Banana Edit), so we poll for up to ~180s before
-  // giving up. The job typically keeps running on KIE AI's side past the
-  // timeout — we just stop waiting and let the caller fall back.
-  const maxAttempts = 90;
+  // Poll for completion. Nano Banana Pro at 2K averages 60-120s but can stretch
+  // to 180-220s under load. We extend the wait to ~240s before giving up.
+  // The job typically keeps running on KIE AI's side past the timeout — we
+  // just stop waiting and let the caller fall back.
+  const maxAttempts = 120;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await new Promise((r) => setTimeout(r, 2000));
 
@@ -132,6 +132,6 @@ export async function generateImage(
   }
 
   throw new Error(
-    `KIE AI generation timed out after 180s (taskId ${taskId} may still be processing on KIE AI's side)`
+    `KIE AI generation timed out after 240s (taskId ${taskId} may still be processing on KIE AI's side — check the KIE AI dashboard if you need to recover the result)`
   );
 }

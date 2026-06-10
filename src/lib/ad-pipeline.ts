@@ -361,32 +361,20 @@ async function getSourceImage(
       aspectRatio: "9:16" as const,
     };
 
-    const tryKie = async () => {
-      const result = await kieGenerateImage(kieRequest);
-      return result.imageBuffer ?? null;
-    };
     const kieMode: GenerationMode = embedHeadline ? "kie-ai-text" : "kie-ai-scene";
 
+    // Single attempt with 240s polling — the retry path was wasting KIE AI
+    // credits without much gain. When the first attempt times out, the job
+    // usually keeps running on KIE AI's side. A retry just fires a fresh
+    // task that competes for the same queue. Better to give the first
+    // attempt the full window and fall back cleanly if it doesn't return.
     let lastKieError: string | undefined;
     try {
-      const buf = await tryKie();
-      if (buf) return { buffer: buf, mode: kieMode };
-    } catch (firstErr) {
-      lastKieError =
-        firstErr instanceof Error ? firstErr.message : String(firstErr);
-      console.warn("KIE AI attempt 1 failed, retrying once after 3s:", firstErr);
-      await new Promise((r) => setTimeout(r, 3000));
-      try {
-        const buf = await tryKie();
-        if (buf) return { buffer: buf, mode: kieMode };
-      } catch (retryErr) {
-        lastKieError =
-          retryErr instanceof Error ? retryErr.message : String(retryErr);
-        console.warn(
-          "KIE AI retry also failed, falling back to bottle shot:",
-          retryErr
-        );
-      }
+      const result = await kieGenerateImage(kieRequest);
+      if (result.imageBuffer) return { buffer: result.imageBuffer, mode: kieMode };
+    } catch (err) {
+      lastKieError = err instanceof Error ? err.message : String(err);
+      console.warn("KIE AI attempt failed, falling back to bottle shot:", err);
     }
 
     if (bottle) {
@@ -419,10 +407,14 @@ function buildEditPrompt(visualPrompt: string, headline?: string): string {
   const blocks: string[] = [
     `You are compositing a single advertising image for the supplement "Dopamine Brain Food."
 
-THE PRODUCT (non-negotiable):
-- Use the EXACT bottle shown in the reference image. Keep its label, colors, shape, branding, and text identical to the reference. Do NOT redesign, recolor, rename, restyle, or "improve" it. Do NOT generate any other product. The ONLY product in this image is the Dopamine Brain Food bottle from the reference.
-- Place the bottle naturally into the scene below. Match the scene's lighting direction, color temperature, perspective, and shadows so it sits believably in the environment.
-- Keep the bottle fully visible and in sharp focus, in the LOWER HALF of the frame, with clear empty space above it. Keep the label crisp; do not add, remove, or alter any words on the label.`,
+THE PRODUCT — ZERO-TOLERANCE BOTTLE PRESERVATION:
+- Treat the reference image as a FIXED PHOTOGRAPH that gets pasted into the scene, like a sticker. You are NOT generating a new bottle. You are PLACING the reference bottle into a different environment.
+- PIXEL-LEVEL FIDELITY to the reference bottle. The label, every letter and number on it, the colors, the cap, the proportions, the shape, the texture — ALL identical to the reference. If the reference shows a deep blue glass bottle with a white twist cap and a label that reads "DOPAMINE BRAIN FOOD," the output must show the EXACT SAME bottle, byte-for-byte.
+- DO NOT redesign the bottle. DO NOT recolor it. DO NOT restyle the label. DO NOT "improve" the typography. DO NOT autocomplete or correct any text on the label. DO NOT change the font, kerning, or layout. DO NOT add gloss, shine, or "premium" effects that aren't already on the reference.
+- DO NOT invent your own bottle, even if it would look similar. If the output bottle differs from the reference in ANY visible way — different text on the label, different shade of blue, different cap style, different proportions, different shape — the image is a FAILURE and unusable.
+- The ONLY supplement product in this image is the bottle from the reference. No other bottles, no alternative versions, no "stylized" variants.
+- Place the bottle naturally into the scene below. Match the scene's lighting direction, color temperature, perspective, and shadows so it sits believably in the environment — but the bottle ITSELF stays unchanged.
+- Keep the bottle fully visible and in sharp focus, in the LOWER HALF of the frame, with clear empty space above it. The label must remain crisp and readable, IDENTICAL to the reference.`,
 
     `NO INVENTED TEXT ANYWHERE:
 - The reference bottle's own label is the ONLY product text allowed.

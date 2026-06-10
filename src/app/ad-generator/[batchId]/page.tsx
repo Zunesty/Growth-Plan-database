@@ -23,6 +23,8 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
   const [rejectReason, setRejectReason] = useState("");
   const [showingWinners, setShowingWinners] = useState(false);
   const [editingConcept, setEditingConcept] = useState<AdConcept | null>(null);
+  const [rejectingConcept, setRejectingConcept] = useState<AdConcept | null>(null);
+  const [conceptRejectReason, setConceptRejectReason] = useState("");
   const [generatingImages, setGeneratingImages] = useState(false);
 
   if (!hydrated) {
@@ -128,6 +130,10 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
         <ConceptReview
           batch={batch}
           onEdit={(c) => setEditingConcept(c)}
+          onReject={(c) => {
+            setRejectingConcept(c);
+            setConceptRejectReason(c.rejectionReason || "");
+          }}
           onChangeStatus={async (conceptId, status) => {
             await fetch("/api/ad-generator/concepts/update", {
               method: "POST",
@@ -334,6 +340,68 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
           }}
         />
       )}
+
+      {/* Concept reject modal — captures a reason that gets stored on the
+          concept. Mirrors the creative reject pattern further up. */}
+      {rejectingConcept && (
+        <div
+          className="fixed inset-0 bg-zunesty-black/70 flex items-center justify-center z-50 p-4"
+          onClick={() => setRejectingConcept(null)}
+        >
+          <div
+            className="bg-zunesty-green-darkest border border-red-500/40 rounded-xl p-6 w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-zunesty-light mb-2">
+              Reject this concept
+            </h3>
+            <p className="text-xs text-zunesty-light/50 mb-1">
+              &ldquo;{rejectingConcept.headline}&rdquo;
+            </p>
+            <p className="text-xs text-zunesty-light/40 mb-4">
+              Why is this concept off? Helps tighten the prompt for future
+              batches and stays on the concept as a record.
+            </p>
+            <textarea
+              value={conceptRejectReason}
+              onChange={(e) => setConceptRejectReason(e.target.value)}
+              placeholder="e.g. tone is too aggressive, wrong setting for DBF, scene doesn't fit morning energy..."
+              rows={3}
+              autoFocus
+              className="w-full rounded-lg border border-red-500/40 bg-zunesty-green-darkest/60 px-4 py-3 text-sm text-zunesty-light placeholder:text-zunesty-light/25 focus:border-red-400 focus:outline-none transition-colors mb-4 resize-y"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setRejectingConcept(null)}
+                className="rounded-lg border border-zunesty-green-dark/40 px-4 py-2 text-sm text-zunesty-light/70 hover:text-zunesty-light transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await fetch("/api/ad-generator/concepts/update", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      batchId,
+                      conceptId: rejectingConcept.id,
+                      status: "rejected",
+                      rejectionReason:
+                        conceptRejectReason.trim() || "No reason given",
+                    }),
+                  });
+                  setRejectingConcept(null);
+                  setConceptRejectReason("");
+                  await refresh();
+                }}
+                className="rounded-lg bg-red-500/80 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 transition-colors"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -346,6 +414,7 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
 function ConceptReview({
   batch,
   onEdit,
+  onReject,
   onChangeStatus,
   onGenerateImages,
   generating,
@@ -356,6 +425,7 @@ function ConceptReview({
     textMode?: string;
   };
   onEdit: (c: AdConcept) => void;
+  onReject: (c: AdConcept) => void;
   onChangeStatus: (conceptId: string, status: ConceptStatus) => Promise<void>;
   onGenerateImages: () => Promise<void>;
   generating: boolean;
@@ -421,7 +491,7 @@ function ConceptReview({
             editable={isReviewActive}
             onEdit={() => onEdit(c)}
             onApprove={() => onChangeStatus(c.id, "approved")}
-            onReject={() => onChangeStatus(c.id, "rejected")}
+            onReject={() => onReject(c)}
           />
         ))}
       </div>
@@ -515,6 +585,17 @@ function ConceptCard({
         </span>{" "}
         {concept.visualPrompt}
       </p>
+
+      {concept.status === "rejected" && concept.rejectionReason && (
+        <div className="rounded border border-red-500/30 bg-red-500/5 px-2.5 py-2 mb-3">
+          <p className="text-[9px] uppercase tracking-wider font-semibold text-red-400/80 mb-0.5">
+            Rejected because
+          </p>
+          <p className="text-xs text-red-300/90 italic leading-snug">
+            &ldquo;{concept.rejectionReason}&rdquo;
+          </p>
+        </div>
+      )}
 
       {editable && (
         <div className="flex gap-2 pt-2 border-t border-zunesty-green-dark/20">
