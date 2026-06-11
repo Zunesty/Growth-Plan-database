@@ -87,12 +87,18 @@ export async function generateConceptsForBatch(
   const productConfig =
     product === "all" ? null : PRODUCTS.find((p) => p.id === product) || null;
 
+  // Pull what the team has killed in recent batches for this product so
+  // Claude can avoid those patterns. Empty array if nothing rejected yet
+  // or query fails — never blocks generation.
+  const pastRejections = await fetchRecentRejections(product);
+
   const rawConcepts = await ideateConcepts(
     winners,
     count,
     productConfig,
     notes,
-    creativityLevel
+    creativityLevel,
+    pastRejections
   );
 
   const concepts: AdConcept[] = rawConcepts.map((c, i) => ({
@@ -538,6 +544,106 @@ export function resolvePublicOrigin(req: NextRequest): string | null {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+// Past rejection memory — fed back to Claude on the next batch so it learns
+// which hooks / settings / patterns the team has already killed.
+// ───────────────────────────────────────────────────────────────────────────
+
+export type PastRejection = {
+  /** "concept" → user rejected during Phase 1 review.
+   *  "creative" → user rejected the final image during Phase 2. */
+  type: "concept" | "creative";
+  /** The headline that got rejected. */
+  headline: string;
+  /** The free-text reason the rejector gave. */
+  reason: string;
+  /** Visual prompt or filename for additional context (creative only). */
+  context?: string;
+};
+
+/**
+ * Pull recent rejections (concept + creative) for the given product, sorted
+ * by recency. Shared across the team — no per-user filter. Limited so the
+ * Claude prompt doesn't bloat.
+ *
+ * - We look at the last `batchLimit` batches for the same product.
+ * - From those: rejected concepts (`status === "rejected"` with a
+ *   rejectionReason) + rejected creatives (same shape).
+ * - Returns up to `rejectionLimit` entries (most-recent-first).
+ */
+export async function fetchRecentRejections(
+  product: string,
+  batchLimit = 10,
+  rejectionLimit = 10
+): Promise<PastRejection[]> {
+  try {
+    const { data: batchRows } = await supabase
+      .from("ad_batches")
+      .select("id, data, updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(batchLimit * 3); // overfetch since we filter by product in code
+    if (!batchRows || batchRows.length === 0) return [];
+
+    const matchingBatches = (batchRows as Array<{ id: string; data: AdBatch }>)
+      .map((r) => r.data)
+      .filter((b) => b.product === product)
+      .slice(0, batchLimit);
+    if (matchingBatches.length === 0) return [];
+
+    const conceptRejections: PastRejection[] = matchingBatches.flatMap((b) =>
+      (b.concepts || [])
+        .filter((c) => c.status === "rejected" && c.rejectionReason)
+        .map((c) => ({
+          type: "concept" as const,
+          headline: c.headline,
+          reason: c.rejectionReason!,
+        }))
+    );
+
+    const batchIds = matchingBatches.map((b) => b.id);
+    let creativeRejections: PastRejection[] = [];
+    if (batchIds.length > 0) {
+      const { data: creativeRows } = await supabase
+        .from("ad_creatives")
+        .select("data, updated_at")
+        .in("batch_id", batchIds)
+        .order("updated_at", { ascending: false })
+        .limit(50);
+      const creatives = ((creativeRows || []) as Array<{ data: AdCreative }>)
+        .map((r) => r.data)
+        .filter((c) => c.status === "rejected" && c.rejectionReason);
+      creativeRejections = creatives.map((c) => ({
+        type: "creative" as const,
+        headline: c.headline,
+        reason: c.rejectionReason!,
+        context: c.filename,
+      }));
+    }
+
+    return [...conceptRejections, ...creativeRejections].slice(0, rejectionLimit);
+  } catch (err) {
+    console.warn("fetchRecentRejections failed:", err);
+    return [];
+  }
+}
+
+function formatRejectionsBlock(rejections: PastRejection[]): string {
+  if (rejections.length === 0) return "";
+  const lines = rejections.map((r, i) => {
+    const label = r.type === "concept" ? "REJECTED CONCEPT" : "REJECTED CREATIVE";
+    return `${i + 1}. ${label}: "${r.headline}"
+   Reason: ${r.reason}`;
+  });
+  return `
+
+────────────────────────────────────────────────────────────────────────
+PAST REJECTIONS — recent patterns the team has killed. Treat these as ANTI-PATTERNS: do NOT reproduce these hooks, headlines, framings, or settings. Vary aggressively away from anything that looks like these.
+
+${lines.join("\n\n")}
+────────────────────────────────────────────────────────────────────────
+`;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
 // Claude ideation
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -546,7 +652,8 @@ async function ideateConcepts(
   count: number,
   productConfig: ProductConfig | null,
   notes?: string,
-  creativityLevel: CreativityLevel = "moderate"
+  creativityLevel: CreativityLevel = "moderate",
+  pastRejections: PastRejection[] = []
 ) {
   // Austin's June 2026 rewrite — locked to Dopamine Brain Food. We retain
   // the productConfig parameter for future-proofing (other products will
@@ -572,6 +679,8 @@ Use the winning ads as PATTERNS — same angles and styles that are working — 
 Use the winning ads as ONE data point only — not the ceiling. Push for new angles, unconventional hooks, and scenes that haven't been tried yet. Take real creative risks. Half the batch should explore territory the winners don't cover, while still respecting the brand voice, product themes, and compliance rules.`,
   };
 
+  const rejectionsBlock = formatRejectionsBlock(pastRejections);
+
   // High-priority user notes block. Austin tested with notes like "create two
   // ads about l-tyrosine improving focus" and found they weren't being
   // respected. Putting them near the top with strong language so Claude
@@ -595,7 +704,7 @@ PRODUCT: Dopamine Brain Food
 - Active ingredients (CONTEXT ONLY — never state in copy): L-Tyrosine + B-vitamins (B6 P5P, Folate, B12).
 
 This system generates ads for Dopamine Brain Food and NOTHING ELSE. Never reference, name, or imply any other product (no NeuroFuel, no MagTech, no other SKU). Never invent a product name.
-${notesBlock}
+${notesBlock}${rejectionsBlock}
 APPROVED BENEFIT LANGUAGE (lean on these — FDA structure/function safe):
 - supports the body's natural dopamine production / promotes dopamine production already within a healthy range
 - supports mental drive and motivation
