@@ -336,11 +336,23 @@ export type AdConcept = {
  */
 export type AdTextMode = "text" | "no-text";
 
+/**
+ * How closely Claude should hew to the winning-ad patterns when ideating.
+ * - "strict"   → stick very close to the winners. Same structural beats,
+ *                same scene archetypes. Minimal deviation.
+ * - "moderate" → default. Use winners as patterns, generate fresh variations.
+ * - "creative" → push past the winners. Novel angles, unusual scenes, new
+ *                hooks. More risk, more variety.
+ */
+export type CreativityLevel = "strict" | "moderate" | "creative";
+
 export type AdBatch = {
   id: string;
   product: AdProductSelection;
   /** Whether this batch's creatives should have a headline overlay. */
   textMode?: AdTextMode;
+  /** How closely Claude should follow the winning-ad patterns. Default "moderate". */
+  creativityLevel?: CreativityLevel;
   /** Drive folder ID for the per-batch output subfolder (e.g. "2026-05-28_14-30 NeuroFuel"). Set when the batch is started, if Drive is configured. */
   outputFolderId?: string;
   /** Drive web view URL for the per-batch output subfolder. */

@@ -3,7 +3,11 @@ import {
   generateConceptsForBatch,
   generateImagesForBatch,
 } from "@/lib/ad-pipeline";
-import type { AdTextMode, WinningAd } from "@/lib/ad-generator-types";
+import type {
+  AdTextMode,
+  CreativityLevel,
+  WinningAd,
+} from "@/lib/ad-generator-types";
 
 // Direct-mode batch generation: skip the concept-review step.
 // Calls generate-concepts and immediately generate-images, end-to-end.
@@ -19,14 +23,18 @@ export async function POST(req: NextRequest) {
       product,
       count,
       winners,
+      notes,
       textMode = "text",
+      creativityLevel = "moderate",
     } = (await req.json()) as {
       batchId: string;
       product: string;
       count: number;
       winners: WinningAd[];
       createdBy: string;
+      notes?: string;
       textMode?: AdTextMode;
+      creativityLevel?: CreativityLevel;
     };
 
     const concepts = await generateConceptsForBatch({
@@ -34,6 +42,8 @@ export async function POST(req: NextRequest) {
       product,
       count,
       winners,
+      notes,
+      creativityLevel,
     });
 
     // Skip-review mode: every concept is implicitly approved.

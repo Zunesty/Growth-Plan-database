@@ -20,6 +20,7 @@ import {
   type AdConcept,
   type AdCreative,
   type AdTextMode,
+  type CreativityLevel,
   type GenerationMode,
   type ProductConfig,
   type WinningAd,
@@ -58,6 +59,13 @@ export type GenerateConceptsOpts = {
   product: string;
   count: number;
   winners: WinningAd[];
+  /** Free-text user notes from the new-batch modal. Passed through to Claude
+   * as high-priority instructions Claude must respect ahead of the general
+   * brand/strategy guidance. */
+  notes?: string;
+  /** How closely Claude should follow the winning ad patterns vs. push for
+   * novel angles. Default "moderate". */
+  creativityLevel?: CreativityLevel;
 };
 
 /**
@@ -67,12 +75,25 @@ export type GenerateConceptsOpts = {
 export async function generateConceptsForBatch(
   opts: GenerateConceptsOpts
 ): Promise<AdConcept[]> {
-  const { batchId, product, count, winners } = opts;
+  const {
+    batchId,
+    product,
+    count,
+    winners,
+    notes,
+    creativityLevel = "moderate",
+  } = opts;
 
   const productConfig =
     product === "all" ? null : PRODUCTS.find((p) => p.id === product) || null;
 
-  const rawConcepts = await ideateConcepts(winners, count, productConfig);
+  const rawConcepts = await ideateConcepts(
+    winners,
+    count,
+    productConfig,
+    notes,
+    creativityLevel
+  );
 
   const concepts: AdConcept[] = rawConcepts.map((c, i) => ({
     id: `concept-${batchId}-${i}`,
@@ -523,7 +544,9 @@ export function resolvePublicOrigin(req: NextRequest): string | null {
 async function ideateConcepts(
   winners: WinningAd[],
   count: number,
-  productConfig: ProductConfig | null
+  productConfig: ProductConfig | null,
+  notes?: string,
+  creativityLevel: CreativityLevel = "moderate"
 ) {
   // Austin's June 2026 rewrite — locked to Dopamine Brain Food. We retain
   // the productConfig parameter for future-proofing (other products will
@@ -535,6 +558,35 @@ async function ideateConcepts(
   const personTrue = Math.round(count * 0.4); // Austin: ~4 true / ~6 false at 10
   const personFalse = count - personTrue;
 
+  // Creativity guidance — varies the relationship between the winners and
+  // the new concepts. Austin asked for this control directly so the model
+  // doesn't always default to safe variations of past winners.
+  const creativityBlock: Record<CreativityLevel, string> = {
+    strict: `CREATIVITY LEVEL: STRICT.
+Stick CLOSE to the winning-ad patterns. Each concept should clearly riff on a specific winner's structure — same hook archetype, same beat count, similar scene. Minimal deviation. This is a "more of what's already working" batch.`,
+
+    moderate: `CREATIVITY LEVEL: MODERATE.
+Use the winning ads as PATTERNS — same angles and styles that are working — but generate fresh variations. New hooks, new scenes, new beats, while staying in the proven territory.`,
+
+    creative: `CREATIVITY LEVEL: CREATIVE.
+Use the winning ads as ONE data point only — not the ceiling. Push for new angles, unconventional hooks, and scenes that haven't been tried yet. Take real creative risks. Half the batch should explore territory the winners don't cover, while still respecting the brand voice, product themes, and compliance rules.`,
+  };
+
+  // High-priority user notes block. Austin tested with notes like "create two
+  // ads about l-tyrosine improving focus" and found they weren't being
+  // respected. Putting them near the top with strong language so Claude
+  // weights them above the general guidance.
+  const notesBlock = notes && notes.trim()
+    ? `
+
+────────────────────────────────────────────────────────────────────────
+USER NOTES — TOP PRIORITY. Read this BEFORE the general guidance below. If these notes conflict with any general rule, the notes win (within the compliance rules at the bottom).
+
+${notes.trim()}
+────────────────────────────────────────────────────────────────────────
+`
+    : "";
+
   const ideationPrompt = `You are a senior performance-marketing strategist for Natural Stacks. You create scroll-stopping Instagram/Facebook ad concepts for ONE product only.
 
 PRODUCT: Dopamine Brain Food
@@ -543,7 +595,7 @@ PRODUCT: Dopamine Brain Food
 - Active ingredients (CONTEXT ONLY — never state in copy): L-Tyrosine + B-vitamins (B6 P5P, Folate, B12).
 
 This system generates ads for Dopamine Brain Food and NOTHING ELSE. Never reference, name, or imply any other product (no NeuroFuel, no MagTech, no other SKU). Never invent a product name.
-
+${notesBlock}
 APPROVED BENEFIT LANGUAGE (lean on these — FDA structure/function safe):
 - supports the body's natural dopamine production / promotes dopamine production already within a healthy range
 - supports mental drive and motivation
@@ -576,6 +628,9 @@ WINNING-AD PRINCIPLES — distilled from ads currently converting on Meta. Use t
 7. ONE IDEA PER AD. Each concept makes a single point.
 
 VARIETY MANDATE: across the batch, every concept must differ in angle, scene, pain-moment, and copy rhythm. No two may share the same hook or the same setting. Avoid recycling the same openers ("Stop dragging…", "Tired of…") batch after batch — push for fresh, on-trend phrasings.
+
+────────────────────────────────────────────────────────────────────────
+${creativityBlock[creativityLevel]}
 
 ────────────────────────────────────────────────────────────────────────
 INPUT — WINNING ADS FROM THE ACCOUNT (from Triple Whale or mocked).

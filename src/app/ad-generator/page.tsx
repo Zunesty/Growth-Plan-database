@@ -10,6 +10,7 @@ import {
   type AdBatch,
   type AdProductSelection,
   type AdTextMode,
+  type CreativityLevel,
   type WinningAd,
 } from "@/lib/ad-generator-types";
 
@@ -28,6 +29,8 @@ export default function AdGeneratorPage() {
   const [selectedProduct, setSelectedProduct] =
     useState<AdProductSelection>("dopamine-brain-food");
   const [textMode, setTextMode] = useState<AdTextMode>("text");
+  const [creativityLevel, setCreativityLevel] =
+    useState<CreativityLevel>("moderate");
   const [skipReview, setSkipReview] = useState(false);
   const router = useRouter();
   const [bottlePreview, setBottlePreview] = useState<BottlePreview[]>([]);
@@ -82,6 +85,7 @@ export default function AdGeneratorPage() {
         rejectedCount: 0,
         winners,
         textMode,
+        creativityLevel,
         createdBy: "Santiago",
         createdAt: new Date().toISOString(),
         notes: notes || undefined,
@@ -99,8 +103,10 @@ export default function AdGeneratorPage() {
           batchId: batch.id,
           product: batch.product,
           textMode,
+          creativityLevel,
           count,
           winners,
+          notes: notes || undefined,
           createdBy: batch.createdBy,
         }),
       });
@@ -314,6 +320,65 @@ export default function AdGeneratorPage() {
                         key={opt.value}
                         type="button"
                         onClick={() => setTextMode(opt.value as AdTextMode)}
+                        className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                          selected
+                            ? "border-zunesty-green bg-zunesty-green/10"
+                            : "border-zunesty-green-dark/40 bg-zunesty-green-darkest/40 hover:border-zunesty-green-dark"
+                        }`}
+                      >
+                        <p
+                          className={`text-sm font-semibold ${
+                            selected
+                              ? "text-zunesty-green"
+                              : "text-zunesty-light"
+                          }`}
+                        >
+                          {opt.label}
+                        </p>
+                        <p className="text-[10px] text-zunesty-light/50 mt-0.5">
+                          {opt.sub}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Creativity selector — Austin asked for this so he can dial
+                  between hugging the winning patterns vs. pushing for novel
+                  angles. Default "moderate" matches the previous behavior. */}
+              <div>
+                <label className="block text-xs font-medium text-zunesty-light/70 mb-1.5">
+                  Creativity
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      {
+                        value: "strict",
+                        label: "Strict",
+                        sub: "Hug the winners",
+                      },
+                      {
+                        value: "moderate",
+                        label: "Moderate",
+                        sub: "Fresh variations",
+                      },
+                      {
+                        value: "creative",
+                        label: "Creative",
+                        sub: "New angles, more risk",
+                      },
+                    ] as const
+                  ).map((opt) => {
+                    const selected = creativityLevel === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() =>
+                          setCreativityLevel(opt.value as CreativityLevel)
+                        }
                         className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
                           selected
                             ? "border-zunesty-green bg-zunesty-green/10"
