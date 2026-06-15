@@ -73,10 +73,11 @@ export async function generateImage(
   // polling step, which is slow and shouldn't be re-fired on timeout.
   const taskId = await createTaskWithRetry(apiKey, input);
 
-  // Poll for completion. Nano Banana Edit averages 30-60s at 1K so a 120s
-  // ceiling gives plenty of headroom. (Pro at 2K needed 240s — we don't.)
-  // Smaller function-time budget = more ads we can fit in one batch.
-  const maxAttempts = 60;
+  // Poll for completion. Real data from Santiago's batches: Edit at 1K still
+  // has a slow tail — durations observed were 24, 90, 100, 160, and 258s in
+  // a single 5-ad run. 300s ceiling catches the slow ones while still keeping
+  // the function under maxDuration for typical 5-10 ad batches.
+  const maxAttempts = 150;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await new Promise((r) => setTimeout(r, 2000));
 
@@ -119,7 +120,7 @@ export async function generateImage(
   }
 
   throw new Error(
-    `KIE AI generation timed out after 120s (taskId ${taskId} may still be processing on KIE AI's side — check the KIE AI dashboard if you need to recover the result)`
+    `KIE AI generation timed out after 300s (taskId ${taskId} may still be processing on KIE AI's side — check the KIE AI dashboard if you need to recover the result)`
   );
 }
 
