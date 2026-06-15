@@ -358,6 +358,13 @@ export type AdBatch = {
   /** Drive web view URL for the per-batch output subfolder. */
   outputFolderUrl?: string;
   /**
+   * ISO timestamp when the user archived this batch. Archived batches are
+   * hidden from the dashboard by default; the row stays in Supabase and can
+   * be brought back via the "Show archived" toggle. No cascading effect on
+   * the creatives — the Drive files and ad_creatives rows remain untouched.
+   */
+  archivedAt?: string;
+  /**
    * Claude's ad concepts for this batch. Populated by the generate-concepts
    * endpoint. Users approve / reject / edit them before generate-images
    * runs the KIE AI pipeline on the approved subset. Empty when the batch

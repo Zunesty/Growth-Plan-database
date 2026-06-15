@@ -101,7 +101,7 @@ ${context || "(No additional context provided)"}
 Generate the report now.`;
 
       const stream = anthropic.messages.stream({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 8000,
         system: systemPrompt,
         messages: [{ role: "user", content: userMessage }],
@@ -154,7 +154,7 @@ RULES:
       );
 
       const stream = anthropic.messages.stream({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 8000,
         system: systemPrompt,
         messages,

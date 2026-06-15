@@ -32,9 +32,35 @@ export default function AdGeneratorPage() {
   const [creativityLevel, setCreativityLevel] =
     useState<CreativityLevel>("moderate");
   const [skipReview, setSkipReview] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const router = useRouter();
   const [bottlePreview, setBottlePreview] = useState<BottlePreview[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
+
+  const visibleBatches = batches.filter(
+    (b) => showArchived || !b.archivedAt
+  );
+  const archivedCount = batches.filter((b) => !!b.archivedAt).length;
+
+  const handleArchive = async (batchId: string, archived: boolean) => {
+    try {
+      const res = await fetch(
+        `/api/ad-generator/batches/${batchId}/archive`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ archived }),
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Archive failed");
+      }
+      await refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to archive batch");
+    }
+  };
 
   // Fetch bottle preview whenever the modal opens or product changes
   useEffect(() => {
@@ -199,8 +225,27 @@ export default function AdGeneratorPage() {
       {/* Batch list */}
       {batches.length > 0 && (
         <div className="space-y-3">
-          {batches.map((batch) => (
-            <BatchRow key={batch.id} batch={batch} />
+          {archivedCount > 0 && (
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-zunesty-light/40">
+                {showArchived
+                  ? `Showing ${visibleBatches.length} batches (incl. ${archivedCount} archived)`
+                  : `${visibleBatches.length} active batches · ${archivedCount} archived hidden`}
+              </p>
+              <button
+                onClick={() => setShowArchived((s) => !s)}
+                className="text-xs text-zunesty-light/50 hover:text-zunesty-light transition-colors underline-offset-2 hover:underline"
+              >
+                {showArchived ? "Hide archived" : `Show archived (${archivedCount})`}
+              </button>
+            </div>
+          )}
+          {visibleBatches.map((batch) => (
+            <BatchRow
+              key={batch.id}
+              batch={batch}
+              onArchive={() => handleArchive(batch.id, !batch.archivedAt)}
+            />
           ))}
         </div>
       )}
@@ -469,7 +514,13 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function BatchRow({ batch }: { batch: AdBatch }) {
+function BatchRow({
+  batch,
+  onArchive,
+}: {
+  batch: AdBatch;
+  onArchive: () => void;
+}) {
   const product = PRODUCTS.find((p) => p.id === batch.product);
   const date = new Date(batch.createdAt).toLocaleDateString("en-US", {
     month: "short",
@@ -477,11 +528,16 @@ function BatchRow({ batch }: { batch: AdBatch }) {
     hour: "numeric",
     minute: "2-digit",
   });
+  const isArchived = !!batch.archivedAt;
 
   return (
     <Link
       href={`/ad-generator/${batch.id}`}
-      className="block rounded-xl border border-zunesty-green-dark/30 bg-zunesty-green-darkest/20 p-4 hover:border-zunesty-green/40 hover:bg-zunesty-green-darkest/40 transition-all group"
+      className={`block rounded-xl border p-4 transition-all group ${
+        isArchived
+          ? "border-zunesty-green-dark/15 bg-zunesty-green-darkest/10 opacity-60 hover:opacity-90 hover:bg-zunesty-green-darkest/20"
+          : "border-zunesty-green-dark/30 bg-zunesty-green-darkest/20 hover:border-zunesty-green/40 hover:bg-zunesty-green-darkest/40"
+      }`}
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1 min-w-0">
@@ -490,6 +546,11 @@ function BatchRow({ batch }: { batch: AdBatch }) {
               {product?.name || batch.product} · Batch {batch.id.split("-").slice(-1)[0]}
             </h4>
             <BatchStatusBadge status={batch.status} />
+            {isArchived && (
+              <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border border-zunesty-light/20 bg-zunesty-light/5 text-zunesty-light/50">
+                Archived
+              </span>
+            )}
           </div>
           <p className="text-xs text-zunesty-light/40">
             {date} · by {batch.createdBy}
@@ -499,10 +560,24 @@ function BatchRow({ batch }: { batch: AdBatch }) {
           )}
         </div>
 
-        <div className="flex gap-4 text-right">
+        <div className="flex items-center gap-4 text-right">
           <Counter label="Generated" value={batch.generatedCount} total={batch.targetCount} />
           <Counter label="Approved" value={batch.approvedCount} positive />
           <Counter label="Rejected" value={batch.rejectedCount} negative />
+
+          {/* Archive toggle — stopPropagation so click doesn't open the batch */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onArchive();
+            }}
+            title={isArchived ? "Unarchive batch" : "Archive batch"}
+            className="text-zunesty-light/30 hover:text-zunesty-light/80 transition-colors p-1.5 rounded hover:bg-zunesty-green-darkest/40"
+          >
+            {isArchived ? "↩" : "📦"}
+          </button>
         </div>
       </div>
     </Link>
