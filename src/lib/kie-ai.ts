@@ -66,24 +66,12 @@ export async function generateImage(
     input.image_urls = referenceImages;
   }
 
-  const initRes = await fetch(`${KIE_AI_BASE}/jobs/createTask`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ model: MODEL_SLUG, input }),
-  });
-
-  if (!initRes.ok) {
-    throw new Error(`KIE AI init error (${initRes.status}): ${await initRes.text()}`);
-  }
-
-  const initJson = await initRes.json();
-  const taskId: string | undefined = initJson?.data?.taskId;
-  if (!taskId) {
-    throw new Error(`KIE AI did not return a taskId: ${JSON.stringify(initJson)}`);
-  }
+  // createTask is fast (200-500ms) and occasionally returns a 5xx or a 2xx
+  // with no taskId (e.g. {"code":500,"msg":"image_urls file type not supported"}
+  // even when the same URL succeeds on parallel sibling requests). Treat
+  // these as transient and retry with a short backoff — different from the
+  // polling step, which is slow and shouldn't be re-fired on timeout.
+  const taskId = await createTaskWithRetry(apiKey, input);
 
   // Poll for completion. Nano Banana Edit averages 30-60s at 1K so a 120s
   // ceiling gives plenty of headroom. (Pro at 2K needed 240s — we don't.)
@@ -133,4 +121,72 @@ export async function generateImage(
   throw new Error(
     `KIE AI generation timed out after 120s (taskId ${taskId} may still be processing on KIE AI's side — check the KIE AI dashboard if you need to recover the result)`
   );
+}
+
+/**
+ * POST to /jobs/createTask, retrying on transient errors. Three attempts
+ * with 1s / 3s backoff — total worst-case 4s extra on top of the original
+ * createTask round trip. Retries on:
+ *   - HTTP 5xx
+ *   - HTTP 2xx body with no taskId (e.g. {"code":500, "msg":"..."} — KIE AI
+ *     returns these as 200s on the HTTP envelope, with the real error in the
+ *     body. That's what bit Santiago.)
+ *   - Network errors
+ *
+ * Does NOT retry on 4xx (bad request, bad auth, bad model — fix the input
+ * instead).
+ */
+async function createTaskWithRetry(
+  apiKey: string,
+  input: Record<string, unknown>
+): Promise<string> {
+  const body = JSON.stringify({ model: MODEL_SLUG, input });
+  const backoffsMs = [1000, 3000];
+  let lastErr: string | undefined;
+
+  for (let attempt = 0; attempt < backoffsMs.length + 1; attempt++) {
+    try {
+      const initRes = await fetch(`${KIE_AI_BASE}/jobs/createTask`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body,
+      });
+
+      if (initRes.status >= 400 && initRes.status < 500) {
+        // Don't retry client errors — those are real bugs.
+        throw new Error(
+          `KIE AI init error ${initRes.status}: ${(await initRes.text()).slice(0, 500)}`
+        );
+      }
+
+      if (!initRes.ok) {
+        // 5xx
+        lastErr = `KIE AI init HTTP ${initRes.status}: ${(await initRes.text()).slice(0, 200)}`;
+      } else {
+        const initJson = await initRes.json();
+        const taskId: string | undefined = initJson?.data?.taskId;
+        if (taskId) return taskId;
+        // 2xx but no taskId — KIE AI returns its actual error in the body.
+        lastErr = `KIE AI returned no taskId: ${JSON.stringify(initJson).slice(0, 500)}`;
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith("KIE AI init error 4")) {
+        throw err; // client-error rethrow
+      }
+      lastErr = err instanceof Error ? err.message : String(err);
+    }
+
+    const delay = backoffsMs[attempt];
+    if (delay) {
+      console.warn(
+        `KIE AI createTask attempt ${attempt + 1} failed (${lastErr}), retrying after ${delay}ms`
+      );
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+
+  throw new Error(`KIE AI createTask failed after retries: ${lastErr}`);
 }
