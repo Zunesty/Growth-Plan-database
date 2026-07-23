@@ -71,6 +71,7 @@ export default function FollowUpAgentPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastId = useRef(0);
+  const [bootError, setBootError] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   // Imperatively set the editable body's content once per new draft, instead
@@ -121,30 +122,34 @@ export default function FollowUpAgentPage() {
   // Boot
   useEffect(() => {
     (async () => {
-      const s = await api<SessionInfo>("GET", "/api/follow-up-agent/session");
-      setSession(s);
+      try {
+        const s = await api<SessionInfo>("GET", "/api/follow-up-agent/session");
+        setSession(s);
 
-      let { profiles: list } = await api<{ profiles: SafeProfile[] }>("GET", "/api/follow-up-agent/profiles");
-      if (!list.length) {
-        const { profile: created } = await api<{ profile: SafeProfile }>("POST", "/api/follow-up-agent/profiles", { name: "Default" });
-        list = [created];
-      }
-      setProfiles(list);
+        let { profiles: list } = await api<{ profiles: SafeProfile[] }>("GET", "/api/follow-up-agent/profiles");
+        if (!list.length) {
+          const { profile: created } = await api<{ profile: SafeProfile }>("POST", "/api/follow-up-agent/profiles", { name: "Default" });
+          list = [created];
+        }
+        setProfiles(list);
 
-      const saved = typeof window !== "undefined" ? window.localStorage.getItem(PROFILE_STORAGE_KEY) : null;
-      const found = list.find((p) => p.id === saved) || list[0];
-      await refreshProfile(found.id);
+        const saved = typeof window !== "undefined" ? window.localStorage.getItem(PROFILE_STORAGE_KEY) : null;
+        const found = list.find((p) => p.id === saved) || list[0];
+        await refreshProfile(found.id);
 
-      // Gmail OAuth return params
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("gmail") === "connected") {
-        const pid = params.get("profile");
-        if (pid) window.localStorage.setItem(PROFILE_STORAGE_KEY, pid);
-        toast("Gmail connected");
-        window.history.replaceState({}, "", window.location.pathname);
-      } else if (params.get("gmail") === "error") {
-        toast("Gmail connection failed: " + (params.get("reason") || "unknown"), "err");
-        window.history.replaceState({}, "", window.location.pathname);
+        // Gmail OAuth return params
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("gmail") === "connected") {
+          const pid = params.get("profile");
+          if (pid) window.localStorage.setItem(PROFILE_STORAGE_KEY, pid);
+          toast("Gmail connected");
+          window.history.replaceState({}, "", window.location.pathname);
+        } else if (params.get("gmail") === "error") {
+          toast("Gmail connection failed: " + (params.get("reason") || "unknown"), "err");
+          window.history.replaceState({}, "", window.location.pathname);
+        }
+      } catch (e) {
+        setBootError((e as Error).message);
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     })();
@@ -257,6 +262,16 @@ export default function FollowUpAgentPage() {
   };
 
   const needsFillWarn = /\[FILL:/i.test(draftHtml || "");
+
+  if (bootError) {
+    return (
+      <div className="flex-1 max-w-5xl mx-auto w-full px-6 py-12">
+        <div className="rounded-lg border border-red-900/40 bg-red-950/20 px-4 py-3 text-sm text-red-300">
+          Couldn&apos;t load the Follow-Up Agent: {bootError}
+        </div>
+      </div>
+    );
+  }
 
   if (!session || !profile) {
     return (
