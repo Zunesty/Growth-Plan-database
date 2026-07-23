@@ -25,6 +25,12 @@ const tools = [
     href: "/ad-generator",
     status: "Beta",
   },
+  {
+    name: "Follow-Up Agent",
+    description: "Turn sales calls into ready-to-review Gmail drafts, automatically. Zero-click Autopilot from Fathom to Gmail.",
+    href: "/follow-up-agent",
+    status: "Beta",
+  },
 ];
 
 export default function Home() {
