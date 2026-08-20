@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
           properties: {
             title: { title: [{ text: { content: pageTitle } }] },
           },
+          icon: { type: "emoji", emoji: "🚀" as "💡" },
           children: firstBatch.blocks.slice(0, 100),
         }
       : {
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
           properties: {
             title: { title: [{ text: { content: pageTitle } }] },
           },
+          icon: { type: "emoji", emoji: "🚀" as "💡" },
           children: firstBatch.blocks.slice(0, 100),
         };
 
@@ -64,6 +66,7 @@ export async function POST(req: NextRequest) {
           properties: {
             title: { title: [{ text: { content: el.title } }] },
           },
+          icon: { type: "emoji", emoji: getSubPageIcon(el.title) as "💡" },
           children: subBlocks.slice(0, 100),
         });
 
@@ -126,6 +129,7 @@ const SUB_PAGE_SECTIONS = [
   "what working together",
   "value stack",
   "what we do",
+  "what's included",
   "our guarantee",
   "partnership options",
 ];
@@ -135,6 +139,34 @@ const H1_SUB_PAGE_SECTIONS = [
   "next steps",
   "partnership options",
 ];
+
+// Relevant emoji per sub-page, matched the same way as SUB_PAGE_SECTIONS above.
+const SUB_PAGE_ICONS: { match: string; emoji: string }[] = [
+  { match: "case studies", emoji: "🏆" },
+  { match: "unique advantage", emoji: "⭐" },
+  { match: "the why", emoji: "🤔" },
+  { match: "what can you expect", emoji: "🔮" },
+  { match: "bonus", emoji: "🎁" },
+  { match: "scale & celebrate", emoji: "🎉" },
+  { match: "next steps", emoji: "🧭" },
+  { match: "revenue growth", emoji: "📈" },
+  { match: "what working together", emoji: "🗓️" },
+  { match: "value stack", emoji: "💰" },
+  { match: "what's included", emoji: "📦" },
+  { match: "what we do and what you do", emoji: "🧩" },
+  { match: "our guarantee", emoji: "🛡️" },
+  { match: "partnership options", emoji: "🤝" },
+];
+
+function getSubPageIcon(title: string): string {
+  const lower = title.toLowerCase().trim();
+  // Numbered steps (dynamic titles like "1. Positioning & Offer Creation")
+  if (lower.startsWith("1.")) return "🎯";
+  if (lower.startsWith("2.")) return "📣";
+  if (lower.startsWith("3.")) return "💼";
+  const found = SUB_PAGE_ICONS.find(({ match }) => lower.includes(match));
+  return found ? found.emoji : "📄";
+}
 
 // Steps are matched separately — they start with "1.", "2.", "3." but we need to
 // avoid matching things like "1. WORKING WITH AGENCIES" inside From Here
@@ -340,8 +372,13 @@ function markdownToNotionBlocks(markdown: string): NotionBlock[] {
         to_do: { rich_text: parseInlineMarkdown(content), checked: true },
       });
     }
-    // Cross bullet (⛔️)
-    else if (line.trim().startsWith("⛔️") || line.trim().startsWith("⛔")) {
+    // Cross bullet (⛔️ / ⛔ / 🚫 / ❌)
+    else if (
+      line.trim().startsWith("⛔️") ||
+      line.trim().startsWith("⛔") ||
+      line.trim().startsWith("🚫") ||
+      line.trim().startsWith("❌")
+    ) {
       blocks.push({
         object: "block",
         type: "bulleted_list_item",

@@ -1,3 +1,5 @@
+export type OutboundMethod = "keynote" | "podcast" | "interview" | "direct";
+
 export type FormData = {
   salespersonName: string;
   prospectFirstName: string;
@@ -12,4 +14,5 @@ export type FormData = {
   whatTheyDontWant: string;
   currentState: string;
   endState: string;
+  recommendedOutboundMethod: OutboundMethod;
 };

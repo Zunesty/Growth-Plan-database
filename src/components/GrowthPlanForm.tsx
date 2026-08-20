@@ -3,7 +3,14 @@
 import { useState } from "react";
 import type { FormData } from "@/lib/types";
 
-const FIELDS: { key: keyof FormData; label: string; type: "text" | "textarea"; required: boolean; placeholder: string }[] = [
+const FIELDS: {
+  key: keyof FormData;
+  label: string;
+  type: "text" | "textarea" | "select";
+  required: boolean;
+  placeholder?: string;
+  options?: { value: string; label: string }[];
+}[] = [
   { key: "salespersonName", label: "Salesperson Full Name", type: "text", required: true, placeholder: "e.g. John Smith" },
   { key: "prospectFirstName", label: "Prospect First Name", type: "text", required: true, placeholder: "e.g. Sarah" },
   { key: "prospectLastName", label: "Prospect Last Name", type: "text", required: true, placeholder: "e.g. Johnson" },
@@ -17,6 +24,18 @@ const FIELDS: { key: keyof FormData; label: string; type: "text" | "textarea"; r
   { key: "whatTheyDontWant", label: "What Do They Not Want to Do?", type: "textarea", required: true, placeholder: "e.g. They don't want to do cold calling..." },
   { key: "currentState", label: "What Is Their Current State?", type: "textarea", required: true, placeholder: "Where are they now?..." },
   { key: "endState", label: "What Is Their End State?", type: "textarea", required: true, placeholder: "Where do they want to be?..." },
+  {
+    key: "recommendedOutboundMethod",
+    label: "Recommended Outbound Method",
+    type: "select",
+    required: true,
+    options: [
+      { value: "keynote", label: "Keynote Method" },
+      { value: "podcast", label: "Podcast Method" },
+      { value: "interview", label: "Interview Method" },
+      { value: "direct", label: "Direct Method" },
+    ],
+  },
 ];
 
 const INITIAL: FormData = {
@@ -24,6 +43,7 @@ const INITIAL: FormData = {
   prospectCompany: "", interviewTranscript: "", discoveryTranscript: "",
   whatDoTheySell: "", icp: "", avgContractValue: "", biggestProblem: "",
   whatTheyDontWant: "", currentState: "", endState: "",
+  recommendedOutboundMethod: "keynote",
 };
 
 export default function GrowthPlanForm({ onSubmit }: { onSubmit: (data: FormData) => void }) {
@@ -49,7 +69,7 @@ export default function GrowthPlanForm({ onSubmit }: { onSubmit: (data: FormData
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {FIELDS.map(({ key, label, type, required, placeholder }) => (
+        {FIELDS.map(({ key, label, type, required, placeholder, options }) => (
           <div key={key}>
             <label className="block text-sm font-medium text-zunesty-light/80 mb-1.5">
               {label}
@@ -64,6 +84,19 @@ export default function GrowthPlanForm({ onSubmit }: { onSubmit: (data: FormData
                 rows={key === "discoveryTranscript" || key === "interviewTranscript" ? 6 : 3}
                 className="w-full rounded-lg border border-zunesty-green-dark/40 bg-zunesty-green-darkest/30 px-4 py-3 text-sm text-zunesty-light placeholder:text-zunesty-light/25 focus:border-zunesty-green focus:outline-none focus:ring-1 focus:ring-zunesty-green/30 transition-colors resize-y"
               />
+            ) : type === "select" ? (
+              <select
+                value={form[key]}
+                onChange={(e) => update(key, e.target.value)}
+                required={required}
+                className="w-full rounded-lg border border-zunesty-green-dark/40 bg-zunesty-green-darkest/30 px-4 py-3 text-sm text-zunesty-light focus:border-zunesty-green focus:outline-none focus:ring-1 focus:ring-zunesty-green/30 transition-colors"
+              >
+                {options?.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             ) : (
               <input
                 type="text"

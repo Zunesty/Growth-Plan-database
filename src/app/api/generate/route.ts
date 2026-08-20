@@ -11,7 +11,36 @@ export async function POST(req: NextRequest) {
       salespersonName, prospectFirstName, prospectLastName, prospectCompany,
       interviewTranscript, discoveryTranscript, whatDoTheySell, icp,
       avgContractValue, biggestProblem, whatTheyDontWant, currentState, endState,
+      recommendedOutboundMethod,
     } = data;
+
+    // Real computed deadline (1 week from generation time) — interpolated as a
+    // concrete value below instead of asking Claude to do date math, which is
+    // what previously produced stale/invented dates.
+    const signByDate = new Date();
+    signByDate.setDate(signByDate.getDate() + 7);
+    const signByDateFormatted = signByDate.toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    const OUTBOUND_METHOD_GUIDANCE: Record<string, string> = {
+      keynote: `> Luckily, we've found a solution: the Keynote Method
+
+Explain how keynotes boost ROI, where they fit in the sales cycle, and how the close works.`,
+      podcast: `> Luckily, we've found a solution: the Podcast Method
+
+Explain that this method involves booking calls with key decision makers matching ${icp} to run a quick podcast episode about a topic related to ${whatDoTheySell}. That content is used to build ${prospectCompany}'s authority and posted publicly. During the podcast conversation, the host pulls out the guest's real problems and issues; once a guest is qualified based on those problems, they're pushed to a discovery call. Explain how this builds trust before the sales conversation even starts, where it fits in the sales cycle, and how the close works.`,
+      interview: `> Luckily, we've found a solution: the Interview Method
+
+Explain that this method involves booking calls with key decision makers matching ${icp} to run a quick interview about a topic related to ${whatDoTheySell}. After interviewing 20-30 people, the transcripts are used to develop a whitepaper, which becomes gated/ungated content used to build authority. Prospects who engage with the whitepaper are then pushed to a discovery call. Explain how this builds trust before the sales conversation even starts, where it fits in the sales cycle, and how the close works.`,
+      direct: `> Luckily, we've found a solution: the Direct Method
+
+Explain that this method involves direct outreach with ${prospectCompany}'s specific offer, triggered off high-intent buying signals such as job postings, project openings, no-brainer ROI offers, and competitor comparison angles. Explain why this avoids generic outbound noise by reaching the right prospect at the moment they're most likely to buy, how it fits in the sales cycle, and how the close works.`,
+    };
+    const outboundMethodGuidance =
+      OUTBOUND_METHOD_GUIDANCE[recommendedOutboundMethod] || OUTBOUND_METHOD_GUIDANCE.keynote;
 
     const prompt = `You are a senior Growth Partner at Zunesty. Create a personalized Growth Plan proposal for a prospect. Follow the EXACT structure below — some sections are STATIC (you copy them exactly) and some are DYNAMIC (you customize for this prospect).
 
@@ -44,18 +73,17 @@ Output the plan in this EXACT format. Sections marked [STATIC] must be copied EX
 
 # ${prospectCompany} Growth Plan by ${salespersonName}
 
-> 💡 For [job title] of [Niche]: **How to get you from [current state] to [desired state] by increasing revenue by [figure in ROI] per month in 12 months without [something they don't want to do]**
+> 💡 For ${prospectFirstName} ${prospectLastName}: **How to get you from [current state] to [desired state] in 12 months without [something they don't want to do]**
 
 CRITICAL FORMATTING RULES FOR THE CALLOUT ABOVE:
 - This MUST be exactly ONE short sentence. No more.
-- [job title] = extract a SHORT job title from the ICP (e.g., "CEOs", "Founders", "VPs of Sales"). Source: ${icp}
-- [Niche] = extract the industry/niche in 1-3 words (e.g., "SaaS", "B2B Consulting", "E-commerce"). Source: ${icp}
+- Do NOT change "For ${prospectFirstName} ${prospectLastName}:" — use that exact prefix, do not substitute a job title or niche.
 - [current state] = condense into a SHORT phrase, max 5-8 words (e.g., "$1.8M and stagnant", "zero predictable pipeline", "$500K with no marketing system"). Source: ${currentState}
 - [desired state] = condense into a SHORT phrase, max 5-8 words (e.g., "$3M+ ARR with predictable pipeline", "$500K+ in sponsorship ARR", "20 qualified leads per month"). Source: ${endState}
-- [figure in ROI] = calculate ONE realistic dollar figure per month based on ACV of ${avgContractValue}
 - [something they don't want to do] = condense into a SHORT phrase, max 5-10 words (e.g., "spending a penny on advertising", "doing cold calling or becoming an influencer", "running ads or cold calling"). Source: ${whatTheyDontWant}
+- Do NOT mention revenue figures, ROI dollar amounts, or "per month" numbers anywhere in this callout.
 
-EXAMPLE of correct format: "For CEOs of B2B Consulting: **How to get you from $1.8M and stagnant to $3M+ ARR with predictable pipeline by increasing revenue by $144,000 per month in 12 months without cold calling or unstrategic paid ads**"
+EXAMPLE of correct format: "For Sarah Johnson: **How to get you from $1.8M and stagnant to $3M+ ARR with predictable pipeline in 12 months without cold calling or unstrategic paid ads**"
 
 DO NOT paste the raw form data. SUMMARIZE each field into a short, punchy phrase. [DYNAMIC]
 
@@ -268,11 +296,15 @@ Explain the sales challenges:
 ⛔️ Sophisticated buyers
 ⛔️ Lack of trust
 
-> Luckily, we've found a solution: the Keynote method
+${outboundMethodGuidance}
 
-Explain how keynotes boost ROI, where they fit in the sales cycle, and how the close works.
+After explaining the method above, add a short Dream 100 subsection. Format it as a single BOLD line (NOT a "#"/"##" heading — plain bold text only) immediately followed by one paragraph:
 
-Include Dream 100 lists, pipeline management, and sales process specifics for their business.
+**Dream 100 Target Account Nurturing**
+
+[Write 1 paragraph explaining the Dream 100 — a curated list of the accounts ${prospectFirstName} most wants to work with, nurtured in parallel with the outbound campaigns above — specific to ${prospectCompany}.]
+
+Then continue with pipeline management and sales process specifics for their business.
 
 ---
 
@@ -423,7 +455,7 @@ Weekly growth reporting and strategic consulting on business growth.
 
 ---
 
-## What We Do — Customized to Your Growth Pillars [DYNAMIC]
+## What's Included? [STATIC HEADING — copy this heading text EXACTLY as written, do NOT customize, rename, or personalize it in any way. Only the BODY content below the heading is DYNAMIC.]
 
 Summarize what Zunesty will specifically do for ${prospectCompany}, organized by the 3 pillars (steps) from the growth plan above. For each pillar, list the concrete deliverables and actions we take. This should read as a clear, customized scope of work tied directly to the 3-step plan.
 
@@ -507,7 +539,7 @@ Format EXACTLY like this (notice only the headers use >):
 
 > **Setup & Initiation ($[amount])**
 
-> **Setup & Initiation ($[amount])** — If you sign by [date 2 weeks from today, which is 2026-04-16], we'll waive the setup fee and reduce the retainer by [X]%
+> **Setup & Initiation ($[amount])** — If you sign by ${signByDateFormatted}, we'll waive the setup fee and reduce the retainer by [X]%
 
 **What's included:**
 - [Detail 1 — specific to their needs]
@@ -553,6 +585,7 @@ Do NOT just guess numbers. Think about actual delivery costs and price according
 ---
 
 IMPORTANT RULES:
+- CRITICAL: Any line that starts with an emoji marker (✅, ❌, 🚫, ⛔️, ⛔) is its OWN separate line/bullet. NEVER merge multiple emoji-prefixed clauses into a single paragraph or run-on sentence — each one must have its own line break before and after it, even inside [STATIC] sections. This applies to the "Now we: ✅ ..." block in Step 3, the "⛔️ Oversaturated market..." block in Step 3, and the "❌ You pay money..." Problems-with-agencies block in Next Steps.
 - ALWAYS address ${prospectFirstName} directly as "you" and "your". NEVER use third person.
 - Be HIGHLY specific to ${prospectCompany}. Reference their actual numbers, problems, industry.
 - [STATIC] sections MUST be copied EXACTLY as written — do NOT paraphrase or modify them.

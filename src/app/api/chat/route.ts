@@ -23,7 +23,7 @@ IMPORTANT: If you modify the plan, after your conversational response, output th
 If the user is just asking a question (not requesting an edit), just respond conversationally without the separator.
 
 CRITICAL FORMAT RULES:
-- The main callout MUST follow: "For [job title] of [Niche]: How to get you from [current state] to [desired state] by increasing revenue by [figure] per month in 12 months without [something they don't want]"
+- The main callout MUST follow: "For ${formData.prospectFirstName} ${formData.prospectLastName}: How to get you from [current state] to [desired state] in 12 months without [something they don't want]" — do NOT add job titles, niches, or revenue/ROI figures to this line.
 - Always address the prospect as "you" — never third person
 - [STATIC] sections must remain exactly as they are
 - Keep the exact markdown heading structure (# for H1, ## for H2, ### for H3)
@@ -36,7 +36,8 @@ Prospect context:
 - ACV: ${formData.avgContractValue}
 - Current State: ${formData.currentState}
 - Desired End State: ${formData.endState}
-- What They Don't Want: ${formData.whatTheyDontWant}`;
+- What They Don't Want: ${formData.whatTheyDontWant}
+- Recommended Outbound Method: ${formData.recommendedOutboundMethod}`;
 
     const messages: Anthropic.MessageParam[] = [
       ...chatHistory.map((msg: { role: string; content: string }) => ({
