@@ -8,6 +8,9 @@ import ClientHubTaskModal from "@/components/ClientHubTaskModal";
 import ClientHubClientStageModal from "@/components/ClientHubClientStageModal";
 import ClientHubHealthEditModal from "@/components/ClientHubHealthEditModal";
 import ClientHubSettingsPanel from "@/components/ClientHubSettingsPanel";
+import ClientHubDigestPreviewModal from "@/components/ClientHubDigestPreviewModal";
+import ClientHubSweepModal from "@/components/ClientHubSweepModal";
+import ClientHubIntegrationsPanel from "@/components/ClientHubIntegrationsPanel";
 import { api } from "@/lib/client-hub-fetch";
 import type { BootstrapPayload, Client, TaskWithNames } from "@/lib/client-hub-types";
 
@@ -18,6 +21,9 @@ type ModalState =
   | { type: "clientStage"; client: Client }
   | { type: "health"; client: Client }
   | { type: "settings" }
+  | { type: "digest" }
+  | { type: "sweep" }
+  | { type: "integrations" }
   | null;
 
 const TABS = [
@@ -134,9 +140,13 @@ export default function ClientHubPage() {
         <ClientHubProjectManagerTab
           tasks={data.tasks}
           clients={data.clients}
+          proposalCount={data.proposals.length}
           filterClientId={filterClientId}
           onFilterClientId={setFilterClientId}
           onOpenTask={(task) => setModal({ type: "task", task })}
+          onOpenDigest={() => setModal({ type: "digest" })}
+          onOpenSweep={() => setModal({ type: "sweep" })}
+          onOpenIntegrations={() => setModal({ type: "integrations" })}
           onDragStateChange={setDragging}
           onRefresh={refresh}
           toast={toast}
@@ -197,6 +207,12 @@ export default function ClientHubPage() {
           toast={toast}
         />
       )}
+
+      {modal?.type === "digest" && <ClientHubDigestPreviewModal onClose={() => setModal(null)} />}
+
+      {modal?.type === "sweep" && <ClientHubSweepModal onClose={() => setModal(null)} onRefresh={refresh} toast={toast} />}
+
+      {modal?.type === "integrations" && <ClientHubIntegrationsPanel onClose={() => setModal(null)} />}
 
       <div className="fixed bottom-6 right-6 z-50 space-y-2">
         {toasts.map((t) => (

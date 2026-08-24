@@ -8,18 +8,26 @@ import type { Client, TaskStatus, TaskWithNames } from "@/lib/client-hub-types";
 export default function ClientHubProjectManagerTab({
   tasks,
   clients,
+  proposalCount,
   filterClientId,
   onFilterClientId,
   onOpenTask,
+  onOpenDigest,
+  onOpenSweep,
+  onOpenIntegrations,
   onDragStateChange,
   onRefresh,
   toast,
 }: {
   tasks: TaskWithNames[];
   clients: Client[];
+  proposalCount: number;
   filterClientId: number | null;
   onFilterClientId: (id: number | null) => void;
   onOpenTask: (task: TaskWithNames | null) => void;
+  onOpenDigest: () => void;
+  onOpenSweep: () => void;
+  onOpenIntegrations: () => void;
   onDragStateChange: (dragging: boolean) => void;
   onRefresh: () => Promise<void>;
   toast: (text: string, kind?: "ok" | "err") => void;
@@ -65,7 +73,31 @@ export default function ClientHubProjectManagerTab({
             {c.name}
           </button>
         ))}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={onOpenDigest}
+            className="rounded-lg border border-zunesty-green-dark/40 px-3 py-1.5 text-xs text-zunesty-light/70 hover:border-zunesty-green/40 transition-colors"
+          >
+            Digest preview
+          </button>
+          <button
+            onClick={onOpenSweep}
+            className="relative rounded-lg border border-zunesty-green-dark/40 px-3 py-1.5 text-xs text-zunesty-light/70 hover:border-zunesty-green/40 transition-colors"
+          >
+            Sweep
+            {proposalCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-zunesty-green text-zunesty-black text-[9px] font-bold flex items-center justify-center">
+                {proposalCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={onOpenIntegrations}
+            title="Integrations"
+            className="w-7 h-7 rounded-lg border border-zunesty-green-dark/40 text-zunesty-light/70 hover:border-zunesty-green/40 transition-colors"
+          >
+            🔌
+          </button>
           <button
             onClick={() => onOpenTask(null)}
             className="rounded-lg bg-zunesty-green px-3 py-1.5 text-xs font-semibold text-zunesty-black hover:bg-zunesty-green/90 transition-colors"
