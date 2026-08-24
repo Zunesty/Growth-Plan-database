@@ -31,6 +31,12 @@ const tools = [
     href: "/follow-up-agent",
     status: "Beta",
   },
+  {
+    name: "Client Hub",
+    description: "Client onboarding, a Slack-first task pipeline, and client health — one shared dashboard.",
+    href: "/client-hub",
+    status: "Beta",
+  },
 ];
 
 export default function Home() {
